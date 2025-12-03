@@ -1,0 +1,653 @@
+# %%
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Modified Bernanke-Blanchard Model - Decomposition
+Liang & Sun (2025)
+
+This script generates decomposition analysis for the modified model.
+
+Key modifications from original:
+1. Wage equation includes capacity utilization (gcu)
+2. Shortage is ENDOGENOUS: shortage = f(lagged_shortage, excess_demand, GSCPI)
+3. New decomposition channels:
+   - Excess demand contribution to shortages (and thus inflation)
+   - GSCPI contribution to shortages (and thus inflation)
+   - Capacity utilization contribution to wages (and thus inflation)
+
+Shocks analyzed:
+- Energy prices (grpe)
+- Food prices (grpf)
+- V/U ratio
+- Shortages (total) - now endogenous
+- Excess demand component of shortages [NEW]
+- GSCPI component of shortages [NEW]
+- Capacity utilization [NEW]
+- Productivity (magpty)
+- Q2 2020 dummy
+- Q3 2020 dummy
+"""
+
+import pandas as pd
+import numpy as np
+from pathlib import Path
+
+# %%
+
+#****************************CHANGE PATH HERE************************************
+# Input Location - coefficients and data from regression_new_model.py
+coef_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_coefficients_new_model.xlsx")
+data_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_simulations_data_new_model.xlsx")
+
+# Output Location
+output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Output Data Python (New Model)")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+#*********************************************************************************
+
+print("="*80)
+print("MODIFIED MODEL DECOMPOSITION")
+print("Liang & Sun (2025)")
+print("="*80)
+
+print("\nLoading data and coefficients...")
+
+# Load simulation data
+data = pd.read_excel(data_path)
+
+# Convert period to datetime if needed
+if not pd.api.types.is_datetime64_any_dtype(data['period']):
+    data['period'] = pd.to_datetime(data['period'])
+
+# Filter data from Q4 2018 onwards
+data = data[data['period'] >= '2018-10-01'].copy().reset_index(drop=True)
+
+print(f"Data loaded: {len(data)} observations")
+print(f"Period: {data['period'].min()} to {data['period'].max()}")
+
+
+# %%
+def load_coefficients(coef_path):
+    """Load coefficients from Excel file (new model with 5 equations)"""
+    gw_beta = pd.read_excel(coef_path, sheet_name='gw')
+    shortage_beta = pd.read_excel(coef_path, sheet_name='shortage')
+    gcpi_beta = pd.read_excel(coef_path, sheet_name='gcpi')
+    cf1_beta = pd.read_excel(coef_path, sheet_name='cf1')
+    cf10_beta = pd.read_excel(coef_path, sheet_name='cf10')
+
+    return {
+        'gw': gw_beta['beta'].values,
+        'shortage': shortage_beta['beta'].values,
+        'gcpi': gcpi_beta['beta'].values,
+        'cf1': cf1_beta['beta'].values,
+        'cf10': cf10_beta['beta'].values
+    }
+
+
+def dynamic_simul_new_model(data, coef_path,
+                             remove_grpe=False, remove_grpf=False,
+                             remove_vu=False, remove_shortage=False,
+                             remove_excess_demand=False, remove_gscpi=False,
+                             remove_gcu=False, remove_magpty=False,
+                             remove_dummy2020_q2=False, remove_dummy2020_q3=False):
+    """
+    Run dynamic simulation for the modified model with specified shocks removed.
+
+    NEW parameters:
+    - remove_excess_demand: Remove excess demand contribution to shortage equation
+    - remove_gscpi: Remove GSCPI contribution to shortage equation
+    - remove_gcu: Remove capacity utilization from wage equation
+
+    The key difference from original: shortage is now ENDOGENOUS and simulated dynamically.
+    """
+
+    # Load coefficients
+    coeffs = load_coefficients(coef_path)
+    gw_beta = coeffs['gw']
+    shortage_beta = coeffs['shortage']
+    gcpi_beta = coeffs['gcpi']
+    cf1_beta = coeffs['cf1']
+    cf10_beta = coeffs['cf10']
+
+    # Track which shocks are removed
+    shocks_removed = []
+    if remove_grpe: shocks_removed.append("grpe")
+    if remove_grpf: shocks_removed.append("grpf")
+    if remove_vu: shocks_removed.append("vu")
+    if remove_shortage: shocks_removed.append("shortage")
+    if remove_excess_demand: shocks_removed.append("excess_demand")
+    if remove_gscpi: shocks_removed.append("gscpi")
+    if remove_gcu: shocks_removed.append("gcu")
+    if remove_magpty: shocks_removed.append("magpty")
+    if remove_dummy2020_q2: shocks_removed.append("dummy2020_q2")
+    if remove_dummy2020_q3: shocks_removed.append("dummy2020_q3")
+
+    print(f"  Running simulation with shocks removed: {shocks_removed if shocks_removed else 'None (baseline)'}")
+
+    # Extract historical data as arrays
+    timesteps = len(data)
+    period = data['period'].values
+
+    # Endogenous variables (historical)
+    gw = data['gw'].values.copy()
+    gcpi = data['gcpi'].values.copy()
+    cf1 = data['cf1'].values.copy()
+    cf10 = data['cf10'].values.copy()
+    shortage = data['shortage'].values.copy()
+    diffcpicf = data['diffcpicf'].values.copy()
+
+    # Exogenous variables (historical)
+    grpe = data['grpe'].values.copy()
+    grpf = data['grpf'].values.copy()
+    vu = data['vu'].values.copy()
+    magpty = data['magpty'].values.copy()
+
+    # New model variables
+    gcu = data['gcu'].values.copy() if 'gcu' in data.columns else np.zeros(timesteps)
+    excess_demand = data['excess_demand'].values.copy() if 'excess_demand' in data.columns else np.zeros(timesteps)
+    gscpi = data['gscpi'].values.copy() if 'gscpi' in data.columns else np.zeros(timesteps)
+
+    # Handle NaN in new variables
+    gcu = np.nan_to_num(gcu, nan=0.0)
+    excess_demand = np.nan_to_num(excess_demand, nan=excess_demand[~np.isnan(excess_demand)].mean() if np.any(~np.isnan(excess_demand)) else 0.0)
+    gscpi = np.nan_to_num(gscpi, nan=0.0)
+
+    # Define dummy variables
+    dummy_q2 = np.zeros(timesteps)
+    dummy_q3 = np.zeros(timesteps)
+    # Find Q2 2020 and Q3 2020 indices
+    for i, p in enumerate(period):
+        p_dt = pd.Timestamp(p)
+        if p_dt.year == 2020 and p_dt.quarter == 2:
+            dummy_q2[i] = 1.0
+        if p_dt.year == 2020 and p_dt.quarter == 3:
+            dummy_q3[i] = 1.0
+
+    # Initialize simulation arrays (first 4 values from historical data)
+    gw_simul = np.zeros(timesteps)
+    gcpi_simul = np.zeros(timesteps)
+    cf1_simul = np.zeros(timesteps)
+    cf10_simul = np.zeros(timesteps)
+    shortage_simul = np.zeros(timesteps)  # NOW ENDOGENOUS
+    diffcpicf_simul = np.zeros(timesteps)
+
+    gw_simul[:4] = gw[:4]
+    gcpi_simul[:4] = gcpi[:4]
+    cf1_simul[:4] = cf1[:4]
+    cf10_simul[:4] = cf10[:4]
+    shortage_simul[:4] = shortage[:4]
+    diffcpicf_simul[:4] = diffcpicf[:4]
+
+    # Initialize shock series for simulation
+    grpe_simul = grpe.copy()
+    grpf_simul = grpf.copy()
+    vu_simul = vu.copy()
+    magpty_simul = magpty.copy()
+    gcu_simul = gcu.copy()
+    excess_demand_simul = excess_demand.copy()
+    gscpi_simul = gscpi.copy()
+    dummy_q2_simul = dummy_q2.copy()
+    dummy_q3_simul = dummy_q3.copy()
+
+    # Get steady-state values for counterfactuals
+    vu_steady = data['vu'].iloc[4] if len(data) > 4 else 1.2
+    shortage_steady = 5.0
+    excess_demand_steady = excess_demand[4] if len(excess_demand) > 4 else 0.0
+    gcu_steady = 0.0  # No growth in steady state
+
+    # Run counterfactual simulation
+    for t in range(4, timesteps):
+
+        # Set exogenous variables based on removal flags
+        if remove_grpe:
+            grpe_simul[t] = 0
+
+        if remove_grpf:
+            grpf_simul[t] = 0
+
+        if remove_vu:
+            vu_simul[t] = vu_steady
+
+        if remove_gcu:
+            gcu_simul[t] = gcu_steady
+
+        if remove_magpty:
+            magpty_simul[t] = 2.0  # Long-run average
+
+        if remove_dummy2020_q2:
+            dummy_q2_simul[t] = 0.0
+
+        if remove_dummy2020_q3:
+            dummy_q3_simul[t] = 0.0
+
+        if remove_excess_demand:
+            excess_demand_simul[t] = excess_demand_steady
+
+        if remove_gscpi:
+            gscpi_simul[t] = 0.0
+
+        # =====================================================================
+        # SHORTAGE EQUATION (NEW - ENDOGENOUS)
+        # shortage = f(lagged_shortage, excess_demand, GSCPI)
+        # Coefficients: [const, L1-L4 shortage, excess_demand L1-L4, gscpi L1-L4]
+        # =====================================================================
+        if remove_shortage:
+            # If removing shortage entirely, set to steady state
+            shortage_simul[t] = shortage_steady
+        else:
+            shortage_simul[t] = (
+                shortage_beta[0] +  # constant
+                shortage_beta[1] * shortage_simul[t-1] +
+                shortage_beta[2] * shortage_simul[t-2] +
+                shortage_beta[3] * shortage_simul[t-3] +
+                shortage_beta[4] * shortage_simul[t-4] +
+                shortage_beta[5] * excess_demand_simul[t] +
+                shortage_beta[6] * excess_demand_simul[t-1] +
+                shortage_beta[7] * excess_demand_simul[t-2] +
+                shortage_beta[8] * excess_demand_simul[t-3] +
+                shortage_beta[9] * excess_demand_simul[t-4] +
+                shortage_beta[10] * gscpi_simul[t] +
+                shortage_beta[11] * gscpi_simul[t-1] +
+                shortage_beta[12] * gscpi_simul[t-2] +
+                shortage_beta[13] * gscpi_simul[t-3] +
+                shortage_beta[14] * gscpi_simul[t-4]
+            )
+
+        # =====================================================================
+        # WAGE EQUATION (MODIFIED - includes capacity utilization)
+        # Coefficients: [const, L1-L4 gw, L1-L4 cf1, L1 magpty, L1-L4 vu,
+        #                L1-L4 diffcpicf, L1-L4 gcu, dummy_q2, dummy_q3]
+        # =====================================================================
+        gw_simul[t] = (
+            gw_beta[0] +  # constant
+            gw_beta[1] * gw_simul[t-1] +
+            gw_beta[2] * gw_simul[t-2] +
+            gw_beta[3] * gw_simul[t-3] +
+            gw_beta[4] * gw_simul[t-4] +
+            gw_beta[5] * cf1_simul[t-1] +
+            gw_beta[6] * cf1_simul[t-2] +
+            gw_beta[7] * cf1_simul[t-3] +
+            gw_beta[8] * cf1_simul[t-4] +
+            gw_beta[9] * magpty_simul[t-1] +
+            gw_beta[10] * vu_simul[t-1] +
+            gw_beta[11] * vu_simul[t-2] +
+            gw_beta[12] * vu_simul[t-3] +
+            gw_beta[13] * vu_simul[t-4] +
+            gw_beta[14] * diffcpicf_simul[t-1] +
+            gw_beta[15] * diffcpicf_simul[t-2] +
+            gw_beta[16] * diffcpicf_simul[t-3] +
+            gw_beta[17] * diffcpicf_simul[t-4] +
+            gw_beta[18] * gcu_simul[t-1] +  # NEW: capacity utilization
+            gw_beta[19] * gcu_simul[t-2] +
+            gw_beta[20] * gcu_simul[t-3] +
+            gw_beta[21] * gcu_simul[t-4] +
+            gw_beta[22] * dummy_q2_simul[t] +
+            gw_beta[23] * dummy_q3_simul[t]
+        )
+
+        # =====================================================================
+        # PRICE EQUATION (same structure as BB)
+        # =====================================================================
+        gcpi_simul[t] = (
+            gcpi_beta[0] +  # constant
+            gcpi_beta[1] * magpty_simul[t] +
+            gcpi_beta[2] * gcpi_simul[t-1] +
+            gcpi_beta[3] * gcpi_simul[t-2] +
+            gcpi_beta[4] * gcpi_simul[t-3] +
+            gcpi_beta[5] * gcpi_simul[t-4] +
+            gcpi_beta[6] * gw_simul[t] +
+            gcpi_beta[7] * gw_simul[t-1] +
+            gcpi_beta[8] * gw_simul[t-2] +
+            gcpi_beta[9] * gw_simul[t-3] +
+            gcpi_beta[10] * gw_simul[t-4] +
+            gcpi_beta[11] * grpe_simul[t] +
+            gcpi_beta[12] * grpe_simul[t-1] +
+            gcpi_beta[13] * grpe_simul[t-2] +
+            gcpi_beta[14] * grpe_simul[t-3] +
+            gcpi_beta[15] * grpe_simul[t-4] +
+            gcpi_beta[16] * grpf_simul[t] +
+            gcpi_beta[17] * grpf_simul[t-1] +
+            gcpi_beta[18] * grpf_simul[t-2] +
+            gcpi_beta[19] * grpf_simul[t-3] +
+            gcpi_beta[20] * grpf_simul[t-4] +
+            gcpi_beta[21] * shortage_simul[t] +  # Now using endogenous shortage
+            gcpi_beta[22] * shortage_simul[t-1] +
+            gcpi_beta[23] * shortage_simul[t-2] +
+            gcpi_beta[24] * shortage_simul[t-3] +
+            gcpi_beta[25] * shortage_simul[t-4]
+        )
+
+        # Catch-up term
+        diffcpicf_simul[t] = 0.25 * (gcpi_simul[t] + gcpi_simul[t-1] +
+                                     gcpi_simul[t-2] + gcpi_simul[t-3]) - cf1_simul[t-4]
+
+        # Long-run expectations (cf10)
+        cf10_simul[t] = (
+            cf10_beta[0] * cf10_simul[t-1] +
+            cf10_beta[1] * cf10_simul[t-2] +
+            cf10_beta[2] * cf10_simul[t-3] +
+            cf10_beta[3] * cf10_simul[t-4] +
+            cf10_beta[4] * gcpi_simul[t] +
+            cf10_beta[5] * gcpi_simul[t-1] +
+            cf10_beta[6] * gcpi_simul[t-2] +
+            cf10_beta[7] * gcpi_simul[t-3] +
+            cf10_beta[8] * gcpi_simul[t-4]
+        )
+
+        # Short-run expectations (cf1)
+        cf1_simul[t] = (
+            cf1_beta[0] * cf1_simul[t-1] +
+            cf1_beta[1] * cf1_simul[t-2] +
+            cf1_beta[2] * cf1_simul[t-3] +
+            cf1_beta[3] * cf1_simul[t-4] +
+            cf1_beta[4] * cf10_simul[t] +
+            cf1_beta[5] * cf10_simul[t-1] +
+            cf1_beta[6] * cf10_simul[t-2] +
+            cf1_beta[7] * cf10_simul[t-3] +
+            cf1_beta[8] * cf10_simul[t-4] +
+            cf1_beta[9] * gcpi_simul[t] +
+            cf1_beta[10] * gcpi_simul[t-1] +
+            cf1_beta[11] * gcpi_simul[t-2] +
+            cf1_beta[12] * gcpi_simul[t-3] +
+            cf1_beta[13] * gcpi_simul[t-4]
+        )
+
+    # =========================================================================
+    # RUN BASELINE SIMULATION (all shocks included)
+    # =========================================================================
+    gw_baseline = np.zeros(timesteps)
+    gcpi_baseline = np.zeros(timesteps)
+    cf1_baseline = np.zeros(timesteps)
+    cf10_baseline = np.zeros(timesteps)
+    shortage_baseline = np.zeros(timesteps)
+    diffcpicf_baseline = np.zeros(timesteps)
+
+    gw_baseline[:4] = gw[:4]
+    gcpi_baseline[:4] = gcpi[:4]
+    cf1_baseline[:4] = cf1[:4]
+    cf10_baseline[:4] = cf10[:4]
+    shortage_baseline[:4] = shortage[:4]
+    diffcpicf_baseline[:4] = diffcpicf[:4]
+
+    for t in range(4, timesteps):
+        # Shortage equation (baseline)
+        shortage_baseline[t] = (
+            shortage_beta[0] +
+            shortage_beta[1] * shortage_baseline[t-1] +
+            shortage_beta[2] * shortage_baseline[t-2] +
+            shortage_beta[3] * shortage_baseline[t-3] +
+            shortage_beta[4] * shortage_baseline[t-4] +
+            shortage_beta[5] * excess_demand[t] +
+            shortage_beta[6] * excess_demand[t-1] +
+            shortage_beta[7] * excess_demand[t-2] +
+            shortage_beta[8] * excess_demand[t-3] +
+            shortage_beta[9] * excess_demand[t-4] +
+            shortage_beta[10] * gscpi[t] +
+            shortage_beta[11] * gscpi[t-1] +
+            shortage_beta[12] * gscpi[t-2] +
+            shortage_beta[13] * gscpi[t-3] +
+            shortage_beta[14] * gscpi[t-4]
+        )
+
+        # Wage equation (baseline)
+        gw_baseline[t] = (
+            gw_beta[0] +
+            gw_beta[1] * gw_baseline[t-1] +
+            gw_beta[2] * gw_baseline[t-2] +
+            gw_beta[3] * gw_baseline[t-3] +
+            gw_beta[4] * gw_baseline[t-4] +
+            gw_beta[5] * cf1_baseline[t-1] +
+            gw_beta[6] * cf1_baseline[t-2] +
+            gw_beta[7] * cf1_baseline[t-3] +
+            gw_beta[8] * cf1_baseline[t-4] +
+            gw_beta[9] * magpty[t-1] +
+            gw_beta[10] * vu[t-1] +
+            gw_beta[11] * vu[t-2] +
+            gw_beta[12] * vu[t-3] +
+            gw_beta[13] * vu[t-4] +
+            gw_beta[14] * diffcpicf_baseline[t-1] +
+            gw_beta[15] * diffcpicf_baseline[t-2] +
+            gw_beta[16] * diffcpicf_baseline[t-3] +
+            gw_beta[17] * diffcpicf_baseline[t-4] +
+            gw_beta[18] * gcu[t-1] +
+            gw_beta[19] * gcu[t-2] +
+            gw_beta[20] * gcu[t-3] +
+            gw_beta[21] * gcu[t-4] +
+            gw_beta[22] * dummy_q2[t] +
+            gw_beta[23] * dummy_q3[t]
+        )
+
+        # Price equation (baseline)
+        gcpi_baseline[t] = (
+            gcpi_beta[0] +
+            gcpi_beta[1] * magpty[t] +
+            gcpi_beta[2] * gcpi_baseline[t-1] +
+            gcpi_beta[3] * gcpi_baseline[t-2] +
+            gcpi_beta[4] * gcpi_baseline[t-3] +
+            gcpi_beta[5] * gcpi_baseline[t-4] +
+            gcpi_beta[6] * gw_baseline[t] +
+            gcpi_beta[7] * gw_baseline[t-1] +
+            gcpi_beta[8] * gw_baseline[t-2] +
+            gcpi_beta[9] * gw_baseline[t-3] +
+            gcpi_beta[10] * gw_baseline[t-4] +
+            gcpi_beta[11] * grpe[t] +
+            gcpi_beta[12] * grpe[t-1] +
+            gcpi_beta[13] * grpe[t-2] +
+            gcpi_beta[14] * grpe[t-3] +
+            gcpi_beta[15] * grpe[t-4] +
+            gcpi_beta[16] * grpf[t] +
+            gcpi_beta[17] * grpf[t-1] +
+            gcpi_beta[18] * grpf[t-2] +
+            gcpi_beta[19] * grpf[t-3] +
+            gcpi_beta[20] * grpf[t-4] +
+            gcpi_beta[21] * shortage_baseline[t] +
+            gcpi_beta[22] * shortage_baseline[t-1] +
+            gcpi_beta[23] * shortage_baseline[t-2] +
+            gcpi_beta[24] * shortage_baseline[t-3] +
+            gcpi_beta[25] * shortage_baseline[t-4]
+        )
+
+        diffcpicf_baseline[t] = 0.25 * (gcpi_baseline[t] + gcpi_baseline[t-1] +
+                                         gcpi_baseline[t-2] + gcpi_baseline[t-3]) - cf1_baseline[t-4]
+
+        cf10_baseline[t] = (
+            cf10_beta[0] * cf10_baseline[t-1] +
+            cf10_beta[1] * cf10_baseline[t-2] +
+            cf10_beta[2] * cf10_baseline[t-3] +
+            cf10_beta[3] * cf10_baseline[t-4] +
+            cf10_beta[4] * gcpi_baseline[t] +
+            cf10_beta[5] * gcpi_baseline[t-1] +
+            cf10_beta[6] * gcpi_baseline[t-2] +
+            cf10_beta[7] * gcpi_baseline[t-3] +
+            cf10_beta[8] * gcpi_baseline[t-4]
+        )
+
+        cf1_baseline[t] = (
+            cf1_beta[0] * cf1_baseline[t-1] +
+            cf1_beta[1] * cf1_baseline[t-2] +
+            cf1_beta[2] * cf1_baseline[t-3] +
+            cf1_beta[3] * cf1_baseline[t-4] +
+            cf1_beta[4] * cf10_baseline[t] +
+            cf1_beta[5] * cf10_baseline[t-1] +
+            cf1_beta[6] * cf10_baseline[t-2] +
+            cf1_beta[7] * cf10_baseline[t-3] +
+            cf1_beta[8] * cf10_baseline[t-4] +
+            cf1_beta[9] * gcpi_baseline[t] +
+            cf1_beta[10] * gcpi_baseline[t-1] +
+            cf1_beta[11] * gcpi_baseline[t-2] +
+            cf1_beta[12] * gcpi_baseline[t-3] +
+            cf1_beta[13] * gcpi_baseline[t-4]
+        )
+
+    # Create output DataFrame
+    out_data = pd.DataFrame({
+        'period': period,
+        'gw': gw,
+        'gw_simul': gw_simul,
+        'gw_baseline': gw_baseline,
+        'gcpi': gcpi,
+        'gcpi_simul': gcpi_simul,
+        'gcpi_baseline': gcpi_baseline,
+        'shortage': shortage,
+        'shortage_simul': shortage_simul,
+        'shortage_baseline': shortage_baseline,
+        'cf1': cf1,
+        'cf1_simul': cf1_simul,
+        'cf1_baseline': cf1_baseline,
+        'cf10': cf10,
+        'cf10_simul': cf10_simul,
+        'cf10_baseline': cf10_baseline,
+        'grpe': grpe,
+        'grpf': grpf,
+        'vu': vu,
+        'gcu': gcu,
+        'excess_demand': excess_demand,
+        'gscpi': gscpi,
+        'magpty': magpty
+    })
+
+    # Calculate contributions if only one shock is removed
+    if len(shocks_removed) == 1:
+        shock_name = shocks_removed[0]
+        out_data[f'{shock_name}_contr_gw'] = gw_baseline - gw_simul
+        out_data[f'{shock_name}_contr_gcpi'] = gcpi_baseline - gcpi_simul
+        out_data[f'{shock_name}_contr_shortage'] = shortage_baseline - shortage_simul
+        out_data[f'{shock_name}_contr_cf1'] = cf1_baseline - cf1_simul
+        out_data[f'{shock_name}_contr_cf10'] = cf10_baseline - cf10_simul
+
+    return out_data
+
+
+# %%
+print("\n" + "="*80)
+print("RUNNING DECOMPOSITION SIMULATIONS")
+print("="*80)
+
+# Run all decomposition scenarios
+
+# Original BB shocks
+print("\n--- Original BB Shocks ---")
+
+print("\nBaseline (all shocks active):")
+baseline = dynamic_simul_new_model(data, coef_path)
+
+print("\nRemove energy prices:")
+remove_grpe = dynamic_simul_new_model(data, coef_path, remove_grpe=True)
+
+print("\nRemove food prices:")
+remove_grpf = dynamic_simul_new_model(data, coef_path, remove_grpf=True)
+
+print("\nRemove V/U:")
+remove_vu = dynamic_simul_new_model(data, coef_path, remove_vu=True)
+
+print("\nRemove shortage (total):")
+remove_shortage = dynamic_simul_new_model(data, coef_path, remove_shortage=True)
+
+print("\nRemove productivity:")
+remove_magpty = dynamic_simul_new_model(data, coef_path, remove_magpty=True)
+
+print("\nRemove Q2 2020 dummy:")
+remove_q2 = dynamic_simul_new_model(data, coef_path, remove_dummy2020_q2=True)
+
+print("\nRemove Q3 2020 dummy:")
+remove_q3 = dynamic_simul_new_model(data, coef_path, remove_dummy2020_q3=True)
+
+# NEW shocks from modified model
+print("\n--- New Model Shocks ---")
+
+print("\nRemove excess demand (from shortage equation):")
+remove_excess_demand = dynamic_simul_new_model(data, coef_path, remove_excess_demand=True)
+
+print("\nRemove GSCPI (from shortage equation):")
+remove_gscpi = dynamic_simul_new_model(data, coef_path, remove_gscpi=True)
+
+print("\nRemove capacity utilization (from wage equation):")
+remove_gcu = dynamic_simul_new_model(data, coef_path, remove_gcu=True)
+
+# Combined removal
+print("\nRemove all shocks:")
+remove_all = dynamic_simul_new_model(data, coef_path,
+                                      remove_grpe=True, remove_grpf=True, remove_vu=True,
+                                      remove_shortage=True, remove_gcu=True, remove_magpty=True,
+                                      remove_dummy2020_q2=True, remove_dummy2020_q3=True)
+
+
+# %%
+print("\n" + "="*80)
+print("EXPORTING RESULTS")
+print("="*80)
+
+# Export to Excel
+baseline.to_excel(output_dir / 'baseline.xlsx', index=False)
+remove_grpe.to_excel(output_dir / 'remove_grpe.xlsx', index=False)
+remove_grpf.to_excel(output_dir / 'remove_grpf.xlsx', index=False)
+remove_vu.to_excel(output_dir / 'remove_vu.xlsx', index=False)
+remove_shortage.to_excel(output_dir / 'remove_shortage.xlsx', index=False)
+remove_magpty.to_excel(output_dir / 'remove_magpty.xlsx', index=False)
+remove_q2.to_excel(output_dir / 'remove_2020q2.xlsx', index=False)
+remove_q3.to_excel(output_dir / 'remove_2020q3.xlsx', index=False)
+remove_excess_demand.to_excel(output_dir / 'remove_excess_demand.xlsx', index=False)
+remove_gscpi.to_excel(output_dir / 'remove_gscpi.xlsx', index=False)
+remove_gcu.to_excel(output_dir / 'remove_gcu.xlsx', index=False)
+remove_all.to_excel(output_dir / 'remove_all.xlsx', index=False)
+
+print(f"\nResults saved to: {output_dir}")
+print("  Original BB shocks:")
+print("    - baseline.xlsx")
+print("    - remove_grpe.xlsx")
+print("    - remove_grpf.xlsx")
+print("    - remove_vu.xlsx")
+print("    - remove_shortage.xlsx")
+print("    - remove_magpty.xlsx")
+print("    - remove_2020q2.xlsx")
+print("    - remove_2020q3.xlsx")
+print("  New model shocks:")
+print("    - remove_excess_demand.xlsx [NEW]")
+print("    - remove_gscpi.xlsx [NEW]")
+print("    - remove_gcu.xlsx [NEW]")
+print("    - remove_all.xlsx")
+
+
+# %%
+# Print summary
+print("\n" + "="*80)
+print("DECOMPOSITION SUMMARY")
+print("="*80)
+
+# Filter to 2020+ for summary
+summary_mask = baseline['period'] >= '2020-01-01'
+
+print(f"\nPeak contributions to INFLATION (gcpi) from 2020 onwards:")
+print("-"*60)
+print(f"  Energy prices:         {remove_grpe.loc[summary_mask, 'grpe_contr_gcpi'].max():.2f}")
+print(f"  Food prices:           {remove_grpf.loc[summary_mask, 'grpf_contr_gcpi'].max():.2f}")
+print(f"  V/U ratio:             {remove_vu.loc[summary_mask, 'vu_contr_gcpi'].max():.2f}")
+print(f"  Shortage (total):      {remove_shortage.loc[summary_mask, 'shortage_contr_gcpi'].max():.2f}")
+print(f"  Productivity:          {remove_magpty.loc[summary_mask, 'magpty_contr_gcpi'].max():.2f}")
+print(f"  Capacity utilization:  {remove_gcu.loc[summary_mask, 'gcu_contr_gcpi'].max():.2f} [NEW]")
+
+print(f"\nPeak contributions to SHORTAGE from 2020 onwards:")
+print("-"*60)
+print(f"  Excess demand:         {remove_excess_demand.loc[summary_mask, 'excess_demand_contr_shortage'].max():.2f} [NEW]")
+print(f"  GSCPI:                 {remove_gscpi.loc[summary_mask, 'gscpi_contr_shortage'].max():.2f} [NEW]")
+
+print(f"\nPeak contributions to WAGES (gw) from 2020 onwards:")
+print("-"*60)
+print(f"  V/U ratio:             {remove_vu.loc[summary_mask, 'vu_contr_gw'].max():.2f}")
+print(f"  Capacity utilization:  {remove_gcu.loc[summary_mask, 'gcu_contr_gw'].max():.2f} [NEW]")
+
+print("\n" + "="*80)
+print("KEY INSIGHT: SHORTAGE DECOMPOSITION")
+print("="*80)
+print("\nThe shortage term in the price equation can now be decomposed into:")
+print("  1. Demand-driven shortages (excess demand = wages/capacity)")
+print("  2. Supply-chain-driven shortages (GSCPI)")
+print("\nThis allows us to answer: How much of the 'shortage-driven' inflation")
+print("was actually caused by demand outpacing supply capacity?")
+
+print("\n" + "="*80)
+print("DECOMPOSITION COMPLETE!")
+print("="*80)
+print("\n")
+
+# %%

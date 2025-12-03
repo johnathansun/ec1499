@@ -1,0 +1,395 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Beamer Presentation
+% LaTeX Template
+% Version 1.0 (10/11/12)
+%
+% This template has been downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND THEMES
+%----------------------------------------------------------------------------------------
+
+\documentclass{beamer}
+
+\usepackage{setspace}
+
+\mode<presentation> {
+
+% The Beamer class comes with a number of default slide themes
+% which change the colors and layouts of slides. Below this is a list
+% of all the themes, uncomment each in turn to see what they look like.
+
+%\usetheme{default}
+%\usetheme{AnnArbor}
+%\usetheme{Antibes}
+%\usetheme{Bergen}
+%\usetheme{Berkeley}
+%\usetheme{Berlin}
+%\usetheme{Boadilla}
+%\usetheme{CambridgeUS}
+%\usetheme{Copenhagen}
+%\usetheme{Darmstadt}
+%\usetheme{Dresden}
+%\usetheme{Frankfurt}
+%\usetheme{Goettingen}
+%\usetheme{Hannover}
+%\usetheme{Ilmenau}
+%\usetheme{JuanLesPins}
+%\usetheme{Luebeck}
+\usetheme{Madrid}
+%\usetheme{Malmoe}
+%\usetheme{Marburg}
+%\usetheme{Montpellier}
+%\usetheme{PaloAlto}
+%\usetheme{Pittsburgh}
+%\usetheme{Rochester}
+%\usetheme{Singapore}
+%\usetheme{Szeged}
+%\usetheme{Warsaw}
+
+% As well as themes, the Beamer class has a number of color themes
+% for any slide theme. Uncomment each of these in turn to see how it
+% changes the colors of your current slide theme.
+
+%\usecolortheme{albatross}
+%\usecolortheme{beaver}
+%\usecolortheme{beetle}
+%\usecolortheme{crane}
+%\usecolortheme{dolphin}
+%\usecolortheme{dove}
+%\usecolortheme{fly}
+%\usecolortheme{lily}
+%\usecolortheme{orchid}
+%\usecolortheme{rose}
+%\usecolortheme{seagull}
+%\usecolortheme{seahorse}
+%\usecolortheme{whale}
+%\usecolortheme{wolverine}
+
+%\setbeamertemplate{footline} % To remove the footer line in all slides uncomment this line
+%\setbeamertemplate{footline}[page number] % To replace the footer line in all slides with a simple slide count uncomment this line
+
+%\setbeamertemplate{navigation symbols}{} % To remove the navigation symbols from the bottom of all slides uncomment this line
+}
+
+\usepackage{enumitem}
+\usepackage{empheq}
+\usepackage{mdframed}
+% \usepackage[margin=1in]{geometry}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{graphicx} % Allows including images
+\usepackage{booktabs} % Allows the use of \toprule, \midrule and \bottomrule in tables
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+\title[Bernanke-Blanchard, Revisited]{Bernanke-Blanchard, Revisited: \\ An Alternative Model of Pandemic-Era Inflation} % The short title appears at the bottom of every slide, the full title is only on the title page
+
+\author{Jerry Liang and Johnathan Sun} % Your name
+\institute[EC 1499] % Your institution as it will appear on the bottom of every slide, may be shorthand to save space
+{
+Economics 1499\\ % Your institution for the title page
+\medskip
+\textit{Harvard University} % Your email address
+}
+\date{December 4th, 2025} % Date, can be changed to a custom date
+
+\begin{document}
+
+\begin{frame}
+\titlepage % Print the title page as the first slide
+\end{frame}
+
+%----------------------------------------------------------------------------------------
+%	PRESENTATION SLIDES
+%----------------------------------------------------------------------------------------
+
+%------------------------------------------------
+
+
+\begin{frame}
+\frametitle{Recapping Bernanke-Blanchard}
+\begin{enumerate}[label=(\arabic*)]
+    \item Bernanke-Blanchard (2023) developed a \textbf{structural VAR model} that decomposed post-pandemic inflation into labor pressures, cost shocks, and expectations.
+    \item They attribute most of the COVID inflation to \textbf{cost shocks} (food, energy, and shortages), which they show in their model to be \textbf{transitory}. 
+    \item Labor pressures were relatively \textbf{insignificant}, though have recently reasserted itself through the traditional Phillips Curve model.
+    \item Their model architecture is summarized in the next slide.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Recapping Bernanke-Blanchard}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{bb_arch.png}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Issues with Bernanke-Blanchard}
+\textbf{What is wrong with their model?}
+\begin{enumerate}[label=(\arabic*)]
+\item Fails to capture \textbf{supply-side slack dynamics} that affect both wages and prices.
+\item Treats shortages as \textbf{exogenous} without decomposing how they arise.
+\end{enumerate}
+For example, some plausible explanations for why shortages arose:
+\begin{enumerate}[label=(\arabic*)]
+\item \textbf{Supply-side Restrictions:} Decreased and/or hitting maximum capacity utilization
+\item \textbf{Demand-side Shocks:} Increased nominal wages and COVID-era subsidies leading to demand grossly outpacing productive capacity.
+\item \textbf{Supply Chain Frictions:} As measured by the NY Fed Global Supply Chain Pressures Index, GSCPI.
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Architecture: Wages}
+Modify:
+\begin{align*}
+    \log w_t
+      &= \underbrace{\mathbb{E}\log p_t}_{\text{Expected price}}
+       + \underbrace{\log \omega_t}_{\text{``Aspirational" \textbf{real} wage}} 
+       + \beta \underbrace{\log x_t}_{\text{Labor market tightness}} \\
+       & \boxed{+ \eta \underbrace{\log u_t}_{\text{Capacity utilization}}}
+\end{align*}
+Letting aspiration real wage evolve as before:
+\begin{align*}
+    \log \omega_t
+      &= \alpha \underbrace{\log \omega_{t-1}}_{\text{Previous ``aspirational" wage}}
+       + (1 - \alpha)\underbrace{\big[\log w_{t-1} - \log p_{t - 1}\big]}_{\text{Previous real wage}}
+       + \underbrace{\varepsilon_t}_{\text{Error term}}
+\end{align*}
+Then:
+\begin{align*}
+    \log w_t - \log w_{t - 1} &= \left[\mathbb{E}\log p_t - \log p_{t-1}\right] 
+    + \alpha \left[\log p_{t-1} - \mathbb{E}\log p_{t-1}\right] \\
+    &+ \beta\left[x_t - \alpha x_{t-1}\right] \boxed{+ \eta\left[u_t - \alpha u_{t-1}\right]} + \varepsilon_t
+\end{align*}
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Architecture: Wages}
+\textbf{Rationale:} Wages should also depend on supply-side demand---if manufacturing is operating at higher capacity, this should put upwards pressure on wages beyond labor market tightness.
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Architecture: Prices}
+Previously, letting wages $w_t$ be fixed, then prices are set as:
+\begin{align*}
+    \log p_t = \underbrace{\log w_t}_{\text{Marginal cost of labor}} + \underbrace{z_t}_{{\text{``Shocks" to price-setting.}}}
+\end{align*}
+
+So:
+\begin{align*}
+    \log p_t - \log p_{t-1} = (\log w_t - \log w_{t-1}) + (z_t - z_{t - 1})
+\end{align*}
+
+In Bernanke-Blanchard, $z_t$ includes food prices, energy prices, and shortages measured by Google Trends data. We wish to endogenize and decompose these price shock terms.
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Architecture: Prices}
+In our new model,
+\begin{align*}
+    \log p_t &= \theta_w\underbrace{\log w_t}_{\text{Marginal cost of labor}} + \theta_f \underbrace{\log f_t}_{\text{Marginal cost of food}} + \theta_e \underbrace{\log e_t}_{\text{Marginal cost of energy}} \\
+    & \boxed{+\theta_s \underbrace{\log s_t(w_t, u_t, \rho_t, g_t)}_{\text{Supply-side pressure (shortage function)}}}
+\end{align*}
+where $\rho_t$ is NPGDP and $g_t$ is the GSCPI supply chain pressure index.
+
+In particular, we let this shortage term evolve as follows:
+\begin{align*}
+    \log s_t &= \phi \underbrace{\log s_{t-1}}_{\text{Residual supply-side pressure}} + \psi \underbrace{[\log w_t - \log \rho_t - \log u_t]}_{\text{Excess demand pressure}} \\
+    &+ \xi \underbrace{\log g_t}_{\text{Supply chain pressure}}
+\end{align*}
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Architecture: Prices}
+\textbf{Rationale:} We use $\log w- \log \rho- \log u$ as a measure of excess demand since wage $w$ is proportional to consumer demand, and we divide through (subtraction in log space) by the effective capacity of the economy, which is PGDP $\times$ Utilization.
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Architecture: Inflation Expectations}
+Same as Bernanke-Blanchard's linear updates.
+
+Short-run expected inflation:
+\begin{align*}
+    \mathbb{E}\log p_{t} - \log p_{t - 1} = \delta \mathbb{E}_{t}\pi^{LR} + (1 - \delta)[\log p_{t-1} - \log p_{t - 2}]
+\end{align*}
+Long-run expected inflation:
+\begin{align*}
+    \mathbb{E}_{t}\pi^{LR} = \gamma \mathbb{E}_{t-1}\pi^{LR} + (1 - \gamma)[\log p_{t-1} - \log p_{t - 2}]
+\end{align*}
+\end{frame}
+
+\begin{frame}{Why Our Model?}
+\begin{enumerate}[label=(\arabic*)]
+\item Captures \textbf{supply-side effects} through \textbf{capacity utilization} (taken as exogenous by Bernanke-Blanchard).
+\item Allows for wages to impact inflation beyond just as an input price --- wages can now affect prices through a \textbf{second channel}, its flowthrough to \textbf{excess demand} hitting production constraints.
+\item Finally, allows for a more accurate \textbf{decomposition} and understanding of the following questions:
+\begin{enumerate}[label=(\roman*)]
+    \item What are the \textbf{relative magnitudes} of each factor ($w_t, u_t, g_t$) that led to the shortages and the subsequent inflation?
+    \item If a substantive root cause of the post-pandemic shortages were due to demand/wages, how \textbf{transitory/persistent} will this be?
+\end{enumerate}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Model Variables}
+\begin{table}[h!]
+\centering
+\footnotesize
+
+\begingroup
+\onehalfspacing
+
+\begin{tabular}{ll}
+\toprule
+\textbf{Variable} & \textbf{Data} \\
+\midrule
+\textcolor{red}{Prices}        & Change in quarterly CPI (annualized) \\
+\textcolor{red}{Wages} & Change in quarterly ECI (annualized) \\
+\textcolor{red}{Short-run inflation expectations}         & 1-yr series, Cleveland Fed \\
+\textcolor{red}{Long-run inflation expectations}      & 10-yr series, Cleveland Fed \\
+\textcolor{red}{Shortages $\dagger$} & Google Trends Data \\
+\textcolor{ForestGreen}{Energy prices (relative)} & Ratio of change in CPI energy to change in ECI \\
+\textcolor{ForestGreen}{Food prices (relative)} & Ratio of change in CPI food to change in ECI \\
+\textcolor{ForestGreen}{Labor market tightness} & $\frac{\text{Vacancies}}{\text{Unemployment}}$ from JOLTS $(v/u)$ \\
+\textcolor{ForestGreen}{Capacity utilization $\star$} & FRED Capacity Utilization Total Index \\
+\textcolor{ForestGreen}{Nominal potential GDP $\star$} & FRED NGDPPOT \\
+\textcolor{ForestGreen}{Supply chain pressure $\star$} & NY Fed GSCPI \\
+\bottomrule
+\end{tabular}
+
+\endgroup
+\caption{Selected variables and their corresponding data series. Red variables are \textcolor{red}{endogenous}, green variables are \textcolor{ForestGreen}{exogenous}. New variables are indicated with $\star$.
+\newline
+$\dagger$: Note that shortages were \textcolor{ForestGreen}{exogenous} but are now \textcolor{red}{endogenous}.}
+\end{table}
+\end{frame}
+
+\begin{frame}
+\frametitle{Wage Equation Results}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Wage Equation Predictions}
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=\linewidth]{wage_equation.png}    
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Price Equation Results}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Price Equation Predictions}
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=\linewidth]{price_equation.png}    
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Inflation Expectations Results}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=0.49\linewidth]{sr.png}
+\includegraphics[width=0.49\linewidth]{lr.png}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Impulse Reaction Functions}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=0.49\linewidth]{price_impulse.png}
+\includegraphics[width=0.49\linewidth]{labor_impulse.png}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{COVID Inflation Breakdown}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=1\linewidth]{inf_decomp.png}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{COVID Wage Breakdown}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=1\linewidth]{wage_decomp.png}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Projections}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+
+\textbf{INSERT NEW GRAPH HERE}
+\begin{center}
+\includegraphics[width=1\linewidth]{projection.png}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Comparisons with Bernanke-Blanchard}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}
+\frametitle{Conclusion}
+\begin{enumerate}[label=(\arabic*)]
+    \item \textbf{LOREM IPSUM}
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Appendix: Non-Linearities}
+It is also possible to think about this shortage dynamic as an inherently \textbf{non-linear} phenomenon without directly fitting it on Google Trends data. In this case, one could write a model as follows:
+\begin{align*}
+    \log p_t &= \theta_w\underbrace{\log w_t}_{\text{Marginal cost of labor}} + \theta_f \underbrace{\log f_t}_{\text{Marginal cost of food}} + \theta_e \underbrace{\log e_t}_{\text{Marginal cost of energy}} \\
+    & \boxed{+\theta_s \underbrace{\log(\text{SoftReLU}(\log w_t - \log \rho_t - \log u_t)) + \xi \log g_t}_{\text{Supply-side pressure (shortage function)}}}
+\end{align*}
+The issues with this architecture is as follows:
+\begin{enumerate}[label=(\arabic*)]
+    \item It is unclear how to determine at what cutoff the non-linearities should take effect without \textbf{overfitting}.
+    \item Since this is \textbf{inherently global}, we cannot regress on \textbf{local differences} $\log w_t - \log w_{t-1}$. This means that we must first sum $\sum_{i \leq t} \Delta \log w_i$, plug into SoftReLU, and then take log differences.
+    \item Because of the non-linearity, there is \textbf{no clean decomposition} of the impulse reaction functions.
+\end{enumerate}
+\end{frame}
+
+\end{document}
