@@ -92,6 +92,16 @@ tick_positions = list(range(0, len(cf_data), 2))
 tick_labels = [quarter_labels[i] for i in tick_positions]
 
 # %%
+# Colorblind-friendly palette
+# Based on Wong (2011) "Points of view: Color blindness" Nature Methods
+colors = {
+    'low': '#0072B2',      # Blue (v/u -> 0.8)
+    'mid': '#D55E00',      # Vermillion (v/u -> 1.2)
+    'high': '#E69F00',     # Orange (v/u -> 1.8)
+    'new_model': '#009E73', # Teal (for comparison plots)
+    'bb_model': '#CC79A7',  # Pink (for comparison plots)
+}
+
 # Common plot styling
 def setup_plot_style():
     """Set up common plot styling"""
@@ -120,11 +130,11 @@ print("\nCreating Figure 14: Conditional Inflation Forecasts (New Model)...")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 
-ax.plot(cf_data['period'], cf_data['gcpi_low'], color='darkblue', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['gcpi_low'], color=colors['low'], linewidth=2,
         label='v/u = 0.8')
-ax.plot(cf_data['period'], cf_data['gcpi_mid'], color='darkred', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['gcpi_mid'], color=colors['mid'], linewidth=2,
         label='v/u = 1.2 = (v/u)*')
-ax.plot(cf_data['period'], cf_data['gcpi_high'], color='orange', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['gcpi_high'], color=colors['high'], linewidth=2,
         label='v/u = 1.8')
 
 ax.set_title('Figure 14. Inflation projections (New Model with endogenous shortage).',
@@ -158,11 +168,11 @@ print("\nCreating Shortage Projections (New - Endogenous)...")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 
-ax.plot(cf_data['period'], cf_data['shortage_low'], color='darkblue', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['shortage_low'], color=colors['low'], linewidth=2,
         label='v/u = 0.8')
-ax.plot(cf_data['period'], cf_data['shortage_mid'], color='darkred', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['shortage_mid'], color=colors['mid'], linewidth=2,
         label='v/u = 1.2 = (v/u)*')
-ax.plot(cf_data['period'], cf_data['shortage_high'], color='orange', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['shortage_high'], color=colors['high'], linewidth=2,
         label='v/u = 1.8')
 
 ax.set_title('Shortage Index Projections (Endogenous in New Model)',
@@ -193,11 +203,11 @@ print("\nCreating V/U paths figure...")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 
-ax.plot(cf_data['period'], cf_data['vu_low'], color='darkblue', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['vu_low'], color=colors['low'], linewidth=2,
         label='v/u -> 0.8')
-ax.plot(cf_data['period'], cf_data['vu_mid'], color='darkred', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['vu_mid'], color=colors['mid'], linewidth=2,
         label='v/u -> 1.2')
-ax.plot(cf_data['period'], cf_data['vu_high'], color='orange', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['vu_high'], color=colors['high'], linewidth=2,
         label='v/u -> 1.8')
 
 ax.set_title('V/U Ratio Paths for Conditional Forecasts',
@@ -228,11 +238,11 @@ print("\nCreating Wage Growth projections...")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 
-ax.plot(cf_data['period'], cf_data['gw_low'], color='darkblue', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['gw_low'], color=colors['low'], linewidth=2,
         label='v/u = 0.8')
-ax.plot(cf_data['period'], cf_data['gw_mid'], color='darkred', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['gw_mid'], color=colors['mid'], linewidth=2,
         label='v/u = 1.2 = (v/u)*')
-ax.plot(cf_data['period'], cf_data['gw_high'], color='orange', linewidth=1.5,
+ax.plot(cf_data['period'], cf_data['gw_high'], color=colors['high'], linewidth=2,
         label='v/u = 1.8')
 
 ax.set_title('Wage Growth Projections (New Model with capacity utilization)',
@@ -265,9 +275,9 @@ fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
 # Panel 1: V/U paths
 ax1 = axes[0, 0]
-ax1.plot(cf_data['period'], cf_data['vu_low'], color='darkblue', linewidth=1.5, label='v/u -> 0.8')
-ax1.plot(cf_data['period'], cf_data['vu_mid'], color='darkred', linewidth=1.5, label='v/u -> 1.2')
-ax1.plot(cf_data['period'], cf_data['vu_high'], color='orange', linewidth=1.5, label='v/u -> 1.8')
+ax1.plot(cf_data['period'], cf_data['vu_low'], color=colors['low'], linewidth=2, label='v/u -> 0.8')
+ax1.plot(cf_data['period'], cf_data['vu_mid'], color=colors['mid'], linewidth=2, label='v/u -> 1.2')
+ax1.plot(cf_data['period'], cf_data['vu_high'], color=colors['high'], linewidth=2, label='v/u -> 1.8')
 ax1.set_title('A. V/U Ratio Paths', fontsize=14)
 ax1.set_ylabel('V/U Ratio', fontsize=12)
 ax1.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
@@ -280,9 +290,9 @@ ax1.legend(loc='best', fontsize=10, frameon=True, edgecolor='black')
 
 # Panel 2: Shortage (endogenous)
 ax2 = axes[0, 1]
-ax2.plot(cf_data['period'], cf_data['shortage_low'], color='darkblue', linewidth=1.5, label='v/u = 0.8')
-ax2.plot(cf_data['period'], cf_data['shortage_mid'], color='darkred', linewidth=1.5, label='v/u = 1.2')
-ax2.plot(cf_data['period'], cf_data['shortage_high'], color='orange', linewidth=1.5, label='v/u = 1.8')
+ax2.plot(cf_data['period'], cf_data['shortage_low'], color=colors['low'], linewidth=2, label='v/u = 0.8')
+ax2.plot(cf_data['period'], cf_data['shortage_mid'], color=colors['mid'], linewidth=2, label='v/u = 1.2')
+ax2.plot(cf_data['period'], cf_data['shortage_high'], color=colors['high'], linewidth=2, label='v/u = 1.8')
 ax2.set_title('B. Shortage Index (Endogenous)', fontsize=14)
 ax2.set_ylabel('Index', fontsize=12)
 ax2.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
@@ -295,9 +305,9 @@ ax2.legend(loc='best', fontsize=10, frameon=True, edgecolor='black')
 
 # Panel 3: Wage growth
 ax3 = axes[1, 0]
-ax3.plot(cf_data['period'], cf_data['gw_low'], color='darkblue', linewidth=1.5, label='v/u = 0.8')
-ax3.plot(cf_data['period'], cf_data['gw_mid'], color='darkred', linewidth=1.5, label='v/u = 1.2')
-ax3.plot(cf_data['period'], cf_data['gw_high'], color='orange', linewidth=1.5, label='v/u = 1.8')
+ax3.plot(cf_data['period'], cf_data['gw_low'], color=colors['low'], linewidth=2, label='v/u = 0.8')
+ax3.plot(cf_data['period'], cf_data['gw_mid'], color=colors['mid'], linewidth=2, label='v/u = 1.2')
+ax3.plot(cf_data['period'], cf_data['gw_high'], color=colors['high'], linewidth=2, label='v/u = 1.8')
 ax3.set_title('C. Wage Growth', fontsize=14)
 ax3.set_ylabel('Percent', fontsize=12)
 ax3.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
@@ -310,9 +320,9 @@ ax3.legend(loc='best', fontsize=10, frameon=True, edgecolor='black')
 
 # Panel 4: Inflation
 ax4 = axes[1, 1]
-ax4.plot(cf_data['period'], cf_data['gcpi_low'], color='darkblue', linewidth=1.5, label='v/u = 0.8')
-ax4.plot(cf_data['period'], cf_data['gcpi_mid'], color='darkred', linewidth=1.5, label='v/u = 1.2')
-ax4.plot(cf_data['period'], cf_data['gcpi_high'], color='orange', linewidth=1.5, label='v/u = 1.8')
+ax4.plot(cf_data['period'], cf_data['gcpi_low'], color=colors['low'], linewidth=2, label='v/u = 0.8')
+ax4.plot(cf_data['period'], cf_data['gcpi_mid'], color=colors['mid'], linewidth=2, label='v/u = 1.2')
+ax4.plot(cf_data['period'], cf_data['gcpi_high'], color=colors['high'], linewidth=2, label='v/u = 1.8')
 ax4.set_title('D. Inflation (CPI)', fontsize=14)
 ax4.set_ylabel('Percent', fontsize=12)
 ax4.set_ylim(1.5, 4.0)
@@ -365,8 +375,8 @@ if (bb_input_dir / 'terminal_mid.xlsx').exists():
 
     # Left: Inflation comparison
     ax1 = axes[0]
-    ax1.plot(cf_data['period'], cf_data['gcpi_mid'], color='darkgreen', linewidth=2, label='New Model')
-    ax1.plot(bb_mid['period'], bb_mid['gcpi_simul'], color='darkred', linewidth=2, linestyle='--', label='BB Model')
+    ax1.plot(cf_data['period'], cf_data['gcpi_mid'], color=colors['new_model'], linewidth=2, label='New Model')
+    ax1.plot(bb_mid['period'], bb_mid['gcpi_simul'], color=colors['bb_model'], linewidth=2, linestyle='--', label='BB Model')
     ax1.set_title('Inflation Forecast: BB vs New Model (v/u -> 1.2)', fontsize=14)
     ax1.set_ylabel('Percent', fontsize=12)
     ax1.set_ylim(1.5, 4.0)
@@ -380,8 +390,8 @@ if (bb_input_dir / 'terminal_mid.xlsx').exists():
 
     # Right: Shortage comparison (BB is exogenous/constant, New is endogenous)
     ax2 = axes[1]
-    ax2.plot(cf_data['period'], cf_data['shortage_mid'], color='darkgreen', linewidth=2, label='New Model (endogenous)')
-    ax2.plot(bb_mid['period'], bb_mid['shortage_simul'], color='darkred', linewidth=2, linestyle='--', label='BB Model (exogenous)')
+    ax2.plot(cf_data['period'], cf_data['shortage_mid'], color=colors['new_model'], linewidth=2, label='New Model (endogenous)')
+    ax2.plot(bb_mid['period'], bb_mid['shortage_simul'], color=colors['bb_model'], linewidth=2, linestyle='--', label='BB Model (exogenous)')
     ax2.set_title('Shortage: BB (exogenous) vs New Model (endogenous)', fontsize=14)
     ax2.set_ylabel('Index', fontsize=12)
     ax2.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])

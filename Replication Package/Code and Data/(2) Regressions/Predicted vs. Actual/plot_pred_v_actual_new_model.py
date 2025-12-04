@@ -166,7 +166,7 @@ fig, ax = plt.subplots(figsize=(10, 6))
 ax.plot(df['period'], df['gcpi'], color='darkblue', linewidth=1.5, label='Actual')
 ax.plot(df['period'], df['gcpif'], color='darkred', linewidth=1.5, label='Predicted')
 
-ax.set_title('Figure 7. INFLATION (New Model), 2020 Q1 - 2023 Q2.', fontsize=17.5, fontweight='normal')
+ax.set_title('INFLATION, 2020 Q1 - 2023 Q2.', fontsize=17.5, fontweight='normal')
 ax.set_ylabel('Percent', fontsize=16)
 ax.set_xlabel('')
 

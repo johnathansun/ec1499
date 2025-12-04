@@ -11,7 +11,9 @@ Generates:
 - Figure 12 (New): Sources of Price Inflation (with new channels)
 - Figure 13 (New): Sources of Wage Inflation (with capacity utilization)
 - Figure 14 (New): Shortage Decomposition (excess demand vs GSCPI)
-- Figure 15 (New): Comparison with Original BB Model
+- Figure 15 (New): Alternative Inflation Decomposition (shortages split into Excess Demand + GSCPI + Capacity Util)
+- Figure 16 (New): Side-by-side comparison of Standard vs Alternative decomposition
+- Figure 17 (New): Combined 3-panel figure
 """
 
 import pandas as pd
@@ -111,20 +113,29 @@ def period_to_quarter_label(dt):
 quarter_labels = [period_to_quarter_label(p) for p in baseline['period']]
 
 # %%
-# Define colors - expanded for new model
+# Define colors - colorblind-friendly palette
+# Based on Wong (2011) "Points of view: Color blindness" Nature Methods
+# and IBM Design accessibility guidelines
+# These colors are distinguishable by people with deuteranopia, protanopia, and tritanopia
 colors = {
-    'Initial Conditions': 'grey',
-    'V/U': 'red',
-    'Energy Prices': 'blue',
-    'Food Prices': 'skyblue',
-    'Shortages': 'gold',
-    'Productivity': 'orange',
-    'Q2 Dummy': 'darkgreen',
-    'Q3 Dummy': 'lightgreen',
-    # NEW colors for new model
-    'Capacity Util': 'purple',
-    'Excess Demand': 'crimson',
-    'GSCPI': 'teal'
+    # Grey for baseline/initial conditions
+    'Initial Conditions': '#888888',  # Medium grey
+
+    # Main economic drivers - using high-contrast, colorblind-safe colors
+    'V/U': '#D55E00',           # Vermillion (burnt orange) - labor market
+    'Energy Prices': '#0072B2',  # Blue - energy
+    'Food Prices': '#56B4E9',    # Sky blue - food (lighter than energy)
+    'Shortages': '#F0E442',      # Yellow - shortages
+    'Productivity': '#E69F00',   # Orange - productivity
+
+    # COVID dummies - using pattern-like contrast
+    'Q2 Dummy': '#332288',       # Dark indigo
+    'Q3 Dummy': '#AA4499',       # Purple/magenta
+
+    # NEW model variables - distinct from above
+    'Capacity Util': '#CC79A7',  # Reddish purple/pink
+    'Excess Demand': '#882255',  # Dark magenta/wine
+    'GSCPI': '#009E73'           # Bluish green (teal)
 }
 
 # Order for stacking (bottom to top) - Initial Conditions at bottom
@@ -203,7 +214,7 @@ for component in stack_order_price:
 # Add actual inflation line
 ax.plot(x, actual_gcpi, color='black', linewidth=2, label='Actual Inflation', marker='', zorder=10)
 
-ax.set_title('Figure 12 (New Model). THE SOURCES OF PRICE INFLATION',
+ax.set_title('Price inflation decomposition',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -211,7 +222,7 @@ ax.set_ylabel('Percent', fontsize=16)
 tick_positions = x[::2]
 tick_labels_subset = [quarter_labels[i] for i in tick_positions]
 ax.set_xticks(tick_positions)
-ax.set_xticklabels(tick_labels_subset, rotation=45, ha='right')
+ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
 
 ax.set_ylim(-4, 12)
 ax.set_yticks(np.arange(-4, 13, 2))
@@ -226,7 +237,7 @@ ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
 legend_order = list(reversed(stack_order_price))
 handles = [mpatches.Patch(color=colors[comp], label=comp) for comp in legend_order]
 handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual Inflation'))
-ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.15),
+ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
           ncol=5, frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -278,13 +289,13 @@ for component in stack_order_wage:
 
 ax.plot(x, actual_gw, color='black', linewidth=2, label='Actual Wage Inflation', marker='', zorder=10)
 
-ax.set_title('Figure 13 (New Model). THE SOURCES OF WAGE INFLATION\n(Includes Capacity Utilization)',
+ax.set_title('Wage inflation decomposition',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
 
 ax.set_xticks(tick_positions)
-ax.set_xticklabels(tick_labels_subset, rotation=45, ha='right')
+ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
 ax.set_ylim(-4, 10)
 ax.set_yticks(np.arange(-4, 11, 2))
 
@@ -298,7 +309,7 @@ ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
 legend_order = list(reversed(stack_order_wage))
 handles = [mpatches.Patch(color=colors[comp], label=comp) for comp in legend_order]
 handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual Wage Inflation'))
-ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.15),
+ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
           ncol=5, frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -348,13 +359,13 @@ for component in stack_order_shortage:
 ax.plot(x, actual_shortage, color='black', linewidth=2, label='Actual Shortage Index', marker='', zorder=10)
 ax.plot(x, simulated_shortage, color='black', linewidth=2, linestyle='--', label='Simulated Shortage', marker='', zorder=10)
 
-ax.set_title('Figure 14 (New Model). SHORTAGE DECOMPOSITION\nExcess Demand vs Supply Chain Pressure',
+ax.set_title('Shortage decomposition',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Shortage Index', fontsize=16)
 
 ax.set_xticks(tick_positions)
-ax.set_xticklabels(tick_labels_subset, rotation=45, ha='right')
+ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax.xaxis.grid(False)
@@ -366,7 +377,7 @@ legend_order = list(reversed(stack_order_shortage))
 handles = [mpatches.Patch(color=colors[comp], label=comp) for comp in legend_order]
 handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual Shortage'))
 handles.append(plt.Line2D([0], [0], color='black', linewidth=2, linestyle='--', label='Simulated Shortage'))
-ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.12),
+ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
           ncol=5, frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -378,9 +389,171 @@ plt.show()
 
 # %%
 # =============================================================================
-# FIGURE 15 (NEW): COMBINED 3-PANEL FIGURE
+# FIGURE 15 (NEW): ALTERNATIVE INFLATION DECOMPOSITION
+# Replaces "Shortages" with Excess Demand + GSCPI + Capacity Utilization
 # =============================================================================
-print("\nCreating Figure 15: Combined 3-Panel Decomposition...")
+print("\nCreating Figure 15 (New Model): Alternative Inflation Decomposition...")
+print("  (Decomposes shortage effect into Excess Demand vs GSCPI)")
+
+# Create alternative decomposition - replace Shortages with its components
+decomp_gcpi_alt = pd.DataFrame({
+    'period': remove_all['period'],
+    'Initial Conditions': remove_all['gcpi_simul'],
+    'Energy Prices': remove_grpe['grpe_contr_gcpi'],
+    'Food Prices': remove_grpf['grpf_contr_gcpi'],
+    'Excess Demand': remove_excess_demand['excess_demand_contr_gcpi'],  # NEW: replaces shortages
+    'GSCPI': remove_gscpi['gscpi_contr_gcpi'],  # NEW: replaces shortages
+    'Capacity Util': remove_gcu['gcu_contr_gcpi'],  # NEW: capacity utilization effect
+    'V/U': remove_vu['vu_contr_gcpi'],
+    'Productivity': remove_magpty['magpty_contr_gcpi'],
+    'Q2 Dummy': remove_q2['dummy2020_q2_contr_gcpi'],
+    'Q3 Dummy': remove_q3['dummy2020_q3_contr_gcpi']
+})
+
+# Stack order for alternative decomposition
+stack_order_alt = ['Initial Conditions', 'Q3 Dummy', 'Q2 Dummy', 'Productivity',
+                   'Capacity Util', 'V/U', 'Food Prices', 'Energy Prices', 'GSCPI', 'Excess Demand']
+
+fig, ax = plt.subplots(figsize=(14, 8))
+
+bottom_pos = np.zeros(len(decomp_gcpi_alt))
+bottom_neg = np.zeros(len(decomp_gcpi_alt))
+
+for component in stack_order_alt:
+    values = decomp_gcpi_alt[component].values
+    pos_vals = np.where(values >= 0, values, 0)
+    neg_vals = np.where(values < 0, values, 0)
+
+    ax.bar(x, pos_vals, width, bottom=bottom_pos, label=component,
+           color=colors[component], edgecolor='white', linewidth=0.5)
+    bottom_pos += pos_vals
+
+    ax.bar(x, neg_vals, width, bottom=bottom_neg,
+           color=colors[component], edgecolor='white', linewidth=0.5)
+    bottom_neg += neg_vals
+
+# Add actual inflation line
+ax.plot(x, actual_gcpi, color='black', linewidth=2, label='Actual Inflation', marker='', zorder=10)
+
+ax.set_title('Price inflation decomposition (break down shortages)',
+             fontsize=16, fontweight='normal')
+ax.set_xlabel('Quarter', fontsize=16)
+ax.set_ylabel('Percent', fontsize=16)
+
+ax.set_xticks(tick_positions)
+ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
+
+ax.set_ylim(-4, 12)
+ax.set_yticks(np.arange(-4, 13, 2))
+
+ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+ax.xaxis.grid(False)
+ax.set_axisbelow(True)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+legend_order_alt = list(reversed(stack_order_alt))
+handles = [mpatches.Patch(color=colors[comp], label=comp) for comp in legend_order_alt]
+handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual Inflation'))
+ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
+          ncol=5, frameon=True, edgecolor='black', fancybox=False)
+
+plt.tight_layout()
+plt.savefig(output_dir / 'figure_15_alt_inflation_decomposition.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_15_alt_inflation_decomposition.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_15_alt_inflation_decomposition.png'}")
+plt.show()
+
+
+# %%
+# =============================================================================
+# FIGURE 16 (NEW): SIDE-BY-SIDE COMPARISON - Original vs Alternative Decomposition
+# =============================================================================
+print("\nCreating Figure 16: Side-by-Side Comparison...")
+
+fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+# Left panel: Original decomposition (with Shortages)
+ax1 = axes[0]
+bottom_pos = np.zeros(len(decomp_gcpi))
+bottom_neg = np.zeros(len(decomp_gcpi))
+
+for component in stack_order_price:
+    values = decomp_gcpi[component].values
+    pos_vals = np.where(values >= 0, values, 0)
+    neg_vals = np.where(values < 0, values, 0)
+    ax1.bar(x, pos_vals, width, bottom=bottom_pos, color=colors[component], edgecolor='white', linewidth=0.3)
+    bottom_pos += pos_vals
+    ax1.bar(x, neg_vals, width, bottom=bottom_neg, color=colors[component], edgecolor='white', linewidth=0.3)
+    bottom_neg += neg_vals
+
+ax1.plot(x, actual_gcpi, color='black', linewidth=2, zorder=10)
+ax1.set_title('(A) Standard Decomposition\n(Shortages as single component)', fontsize=14, fontweight='bold')
+ax1.set_xlabel('Quarter', fontsize=12)
+ax1.set_ylabel('Percent', fontsize=12)
+ax1.set_xticks(tick_positions)
+ax1.set_xticklabels(tick_labels_subset, rotation=0, ha='center', fontsize=10)
+ax1.set_ylim(-4, 12)
+ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+ax1.set_axisbelow(True)
+ax1.spines['top'].set_visible(False)
+ax1.spines['right'].set_visible(False)
+ax1.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+# Right panel: Alternative decomposition (Excess Demand + GSCPI + Capacity Util)
+ax2 = axes[1]
+bottom_pos = np.zeros(len(decomp_gcpi_alt))
+bottom_neg = np.zeros(len(decomp_gcpi_alt))
+
+for component in stack_order_alt:
+    values = decomp_gcpi_alt[component].values
+    pos_vals = np.where(values >= 0, values, 0)
+    neg_vals = np.where(values < 0, values, 0)
+    ax2.bar(x, pos_vals, width, bottom=bottom_pos, color=colors[component], edgecolor='white', linewidth=0.3)
+    bottom_pos += pos_vals
+    ax2.bar(x, neg_vals, width, bottom=bottom_neg, color=colors[component], edgecolor='white', linewidth=0.3)
+    bottom_neg += neg_vals
+
+ax2.plot(x, actual_gcpi, color='black', linewidth=2, zorder=10)
+ax2.set_title('(B) Alternative Decomposition\n(Shortages split into Excess Demand + GSCPI)', fontsize=14, fontweight='bold')
+ax2.set_xlabel('Quarter', fontsize=12)
+ax2.set_ylabel('Percent', fontsize=12)
+ax2.set_xticks(tick_positions)
+ax2.set_xticklabels(tick_labels_subset, rotation=0, ha='center', fontsize=10)
+ax2.set_ylim(-4, 12)
+ax2.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+ax2.set_axisbelow(True)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+# Combined legend
+all_components_comparison = list(set(stack_order_price + stack_order_alt))
+legend_order_comparison = ['Shortages', 'Excess Demand', 'GSCPI', 'Energy Prices', 'Food Prices',
+                           'V/U', 'Capacity Util', 'Productivity', 'Q2 Dummy', 'Q3 Dummy', 'Initial Conditions']
+legend_order_comparison = [c for c in legend_order_comparison if c in all_components_comparison]
+
+handles = [mpatches.Patch(color=colors[comp], label=comp) for comp in legend_order_comparison]
+handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual'))
+
+fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.02),
+           ncol=6, frameon=True, edgecolor='black', fancybox=False, fontsize=10)
+
+plt.suptitle('Inflation Decomposition: Standard vs Alternative (New Model)',
+             fontsize=16, fontweight='bold', y=1.02)
+plt.tight_layout()
+plt.savefig(output_dir / 'figure_16_comparison_decomposition.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_16_comparison_decomposition.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_16_comparison_decomposition.png'}")
+plt.show()
+
+
+# %%
+# =============================================================================
+# FIGURE 17 (NEW): COMBINED 3-PANEL FIGURE
+# =============================================================================
+print("\nCreating Figure 17: Combined 3-Panel Decomposition...")
 
 fig, axes = plt.subplots(1, 3, figsize=(20, 7))
 
@@ -403,7 +576,7 @@ ax1.set_title('(A) Price Inflation', fontsize=14, fontweight='bold')
 ax1.set_xlabel('Quarter', fontsize=12)
 ax1.set_ylabel('Percent', fontsize=12)
 ax1.set_xticks(tick_positions)
-ax1.set_xticklabels(tick_labels_subset, rotation=45, ha='right', fontsize=9)
+ax1.set_xticklabels(tick_labels_subset, rotation=0, ha='center', fontsize=9)
 ax1.set_ylim(-4, 12)
 ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax1.set_axisbelow(True)
@@ -430,7 +603,7 @@ ax2.set_title('(B) Wage Inflation', fontsize=14, fontweight='bold')
 ax2.set_xlabel('Quarter', fontsize=12)
 ax2.set_ylabel('Percent', fontsize=12)
 ax2.set_xticks(tick_positions)
-ax2.set_xticklabels(tick_labels_subset, rotation=45, ha='right', fontsize=9)
+ax2.set_xticklabels(tick_labels_subset, rotation=0, ha='center', fontsize=9)
 ax2.set_ylim(-4, 10)
 ax2.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax2.set_axisbelow(True)
@@ -457,7 +630,7 @@ ax3.set_title('(C) Shortage Index', fontsize=14, fontweight='bold')
 ax3.set_xlabel('Quarter', fontsize=12)
 ax3.set_ylabel('Index', fontsize=12)
 ax3.set_xticks(tick_positions)
-ax3.set_xticklabels(tick_labels_subset, rotation=45, ha='right', fontsize=9)
+ax3.set_xticklabels(tick_labels_subset, rotation=0, ha='center', fontsize=9)
 ax3.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax3.set_axisbelow(True)
 ax3.spines['top'].set_visible(False)
@@ -479,9 +652,9 @@ fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.02),
 plt.suptitle('Decomposition of Pandemic-Era Inflation (Modified Model)',
              fontsize=16, fontweight='bold', y=1.02)
 plt.tight_layout()
-plt.savefig(output_dir / 'figure_15_combined_decomposition.png', dpi=300, bbox_inches='tight')
-plt.savefig(output_dir / 'figure_15_combined_decomposition.pdf', bbox_inches='tight')
-print(f"  Saved to {output_dir / 'figure_15_combined_decomposition.png'}")
+plt.savefig(output_dir / 'figure_17_combined_decomposition.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_17_combined_decomposition.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_17_combined_decomposition.png'}")
 plt.show()
 
 
@@ -493,13 +666,22 @@ print("\n" + "="*80)
 print("DECOMPOSITION SUMMARY")
 print("="*80)
 
-print(f"\nPeak contributions to PRICE inflation (gcpi):")
+print(f"\nPeak contributions to PRICE inflation (gcpi) - Standard Decomposition:")
 print("-"*60)
 print(f"  Energy Prices:      {decomp_gcpi['Energy Prices'].max():.2f} (Q: {quarter_labels[decomp_gcpi['Energy Prices'].argmax()]})")
 print(f"  Food Prices:        {decomp_gcpi['Food Prices'].max():.2f} (Q: {quarter_labels[decomp_gcpi['Food Prices'].argmax()]})")
 print(f"  Shortages:          {decomp_gcpi['Shortages'].max():.2f} (Q: {quarter_labels[decomp_gcpi['Shortages'].argmax()]})")
 print(f"  V/U:                {decomp_gcpi['V/U'].max():.2f} (Q: {quarter_labels[decomp_gcpi['V/U'].argmax()]})")
 print(f"  Productivity:       {decomp_gcpi['Productivity'].max():.2f} (Q: {quarter_labels[decomp_gcpi['Productivity'].argmax()]})")
+
+print(f"\nPeak contributions to PRICE inflation (gcpi) - Alternative Decomposition:")
+print("-"*60)
+print(f"  Energy Prices:      {decomp_gcpi_alt['Energy Prices'].max():.2f} (Q: {quarter_labels[decomp_gcpi_alt['Energy Prices'].argmax()]})")
+print(f"  Food Prices:        {decomp_gcpi_alt['Food Prices'].max():.2f} (Q: {quarter_labels[decomp_gcpi_alt['Food Prices'].argmax()]})")
+print(f"  Excess Demand:      {decomp_gcpi_alt['Excess Demand'].max():.2f} (Q: {quarter_labels[decomp_gcpi_alt['Excess Demand'].argmax()]}) [NEW]")
+print(f"  GSCPI:              {decomp_gcpi_alt['GSCPI'].max():.2f} (Q: {quarter_labels[decomp_gcpi_alt['GSCPI'].argmax()]}) [NEW]")
+print(f"  Capacity Util:      {decomp_gcpi_alt['Capacity Util'].max():.2f} (Q: {quarter_labels[decomp_gcpi_alt['Capacity Util'].argmax()]}) [NEW]")
+print(f"  V/U:                {decomp_gcpi_alt['V/U'].max():.2f} (Q: {quarter_labels[decomp_gcpi_alt['V/U'].argmax()]})")
 
 print(f"\nPeak contributions to WAGE inflation (gw):")
 print("-"*60)
@@ -544,7 +726,9 @@ print(f"\nOutput files saved to: {output_dir}")
 print("  - figure_12_price_decomposition_new.png/pdf")
 print("  - figure_13_wage_decomposition_new.png/pdf")
 print("  - figure_14_shortage_decomposition.png/pdf")
-print("  - figure_15_combined_decomposition.png/pdf")
+print("  - figure_15_alt_inflation_decomposition.png/pdf  [NEW: Excess Demand + GSCPI + CapUtil]")
+print("  - figure_16_comparison_decomposition.png/pdf     [NEW: Side-by-side comparison]")
+print("  - figure_17_combined_decomposition.png/pdf")
 print("\n")
 
 # %%

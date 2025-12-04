@@ -1,0 +1,495 @@
+# %%
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Modified Bernanke-Blanchard Model - Impulse Response Functions
+Liang & Sun (2025)
+
+This script generates IRFs for the modified model.
+
+Key differences from original:
+1. Wage equation includes capacity utilization (gcu)
+2. Shortage is ENDOGENOUS: shortage = f(lagged_shortage, excess_demand, GSCPI)
+3. New shocks analyzed:
+   - Excess demand shock (affects shortages, then inflation)
+   - GSCPI shock (affects shortages, then inflation)
+   - Capacity utilization shock (affects wages, then inflation)
+
+Shocks analyzed:
+- Energy prices (grpe) - one-time shock
+- Food prices (grpf) - one-time shock
+- V/U ratio - persistent shock (rho=1.0)
+- Shortage - one-time shock (now endogenous)
+- Excess demand - one-time shock [NEW]
+- GSCPI - one-time shock [NEW]
+- Capacity utilization - one-time shock [NEW]
+"""
+
+import pandas as pd
+import numpy as np
+from pathlib import Path
+
+# %%
+
+#****************************CHANGE PATH HERE************************************
+# Input Location - coefficients and data from regression_new_model.py
+coef_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_coefficients_new_model.xlsx")
+data_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_simulations_data_new_model.xlsx")
+
+# Output Location
+output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/IRFs/Output Data Python (New Model)")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+#*********************************************************************************
+
+print("="*80)
+print("MODIFIED MODEL IRF SIMULATIONS")
+print("Liang & Sun (2025)")
+print("="*80)
+
+print("\nLoading data and coefficients...")
+
+# Load simulation data
+data = pd.read_excel(data_path)
+
+# Convert period to datetime if needed
+if not pd.api.types.is_datetime64_any_dtype(data['period']):
+    data['period'] = pd.to_datetime(data['period'])
+
+# Filter data for Q4 2019 onwards (for calculating shock standard deviations)
+table_q4_data = data[data['period'] >= '2020-01-01'].copy()
+
+# Filter data from Q4 2018 onwards
+data = data[data['period'] >= '2018-10-01'].copy()
+
+print(f"Data loaded: {len(data)} observations")
+print(f"Q4+ data for shock calculation: {len(table_q4_data)} observations")
+
+
+# %%
+def load_coefficients(coef_path):
+    """Load coefficients from Excel file (new model with 5 equations)"""
+    gw_beta = pd.read_excel(coef_path, sheet_name='gw')
+    shortage_beta = pd.read_excel(coef_path, sheet_name='shortage')
+    gcpi_beta = pd.read_excel(coef_path, sheet_name='gcpi')
+    cf1_beta = pd.read_excel(coef_path, sheet_name='cf1')
+    cf10_beta = pd.read_excel(coef_path, sheet_name='cf10')
+
+    return {
+        'gw': gw_beta['beta'].values,
+        'shortage': shortage_beta['beta'].values,
+        'gcpi': gcpi_beta['beta'].values,
+        'cf1': cf1_beta['beta'].values,
+        'cf10': cf10_beta['beta'].values
+    }
+
+
+def irfs_new_model(data, table_q4_data, shocks, rho, coef_path):
+    """
+    Run impulse response functions for the modified model.
+
+    Parameters:
+    -----------
+    data : DataFrame
+        Historical data (used for reference)
+    table_q4_data : DataFrame
+        Data from Q4 2019+ for calculating shock magnitudes
+    shocks : dict
+        Dictionary of shock flags: {shock_name: True/False}
+    rho : dict
+        Dictionary of persistence parameters: {shock_name: rho_value}
+    coef_path : Path
+        Path to coefficients Excel file
+
+    Returns:
+    --------
+    results : DataFrame
+        IRF simulation results
+    """
+
+    # Load coefficients
+    coeffs = load_coefficients(coef_path)
+    gw_beta = coeffs['gw']
+    shortage_beta = coeffs['shortage']
+    gcpi_beta = coeffs['gcpi']
+    cf1_beta = coeffs['cf1']
+    cf10_beta = coeffs['cf10']
+
+    # Extract shock flags
+    add_grpe_shock = shocks.get('grpe', False)
+    add_grpf_shock = shocks.get('grpf', False)
+    add_vu_shock = shocks.get('vu', False)
+    add_shortage_shock = shocks.get('shortage', False)
+    add_excess_demand_shock = shocks.get('excess_demand', False)
+    add_gscpi_shock = shocks.get('gscpi', False)
+    add_gcu_shock = shocks.get('gcu', False)
+
+    # Extract persistence parameters
+    rho_grpe = rho.get('grpe', 0.0)
+    rho_grpf = rho.get('grpf', 0.0)
+    rho_vu = rho.get('vu', 1.0)
+    rho_shortage = rho.get('shortage', 0.0)
+    rho_excess_demand = rho.get('excess_demand', 0.0)
+    rho_gscpi = rho.get('gscpi', 0.0)
+    rho_gcu = rho.get('gcu', 0.0)
+
+    # Track which shocks are added
+    shocks_added = [k for k, v in shocks.items() if v]
+    print(f"  Running IRF with shocks: {shocks_added}")
+
+    # Define time horizon
+    timesteps = 32
+
+    # Initialize arrays (all zeros - steady state)
+    gw_simul = np.zeros(timesteps)
+    gcpi_simul = np.zeros(timesteps)
+    cf1_simul = np.zeros(timesteps)
+    cf10_simul = np.zeros(timesteps)
+    shortage_simul = np.zeros(timesteps)
+    diffcpicf_simul = np.zeros(timesteps)
+
+    # Exogenous shock series
+    grpe_shock_series = np.zeros(timesteps)
+    grpf_shock_series = np.zeros(timesteps)
+    vu_shock_series = np.zeros(timesteps)
+    excess_demand_shock_series = np.zeros(timesteps)
+    gscpi_shock_series = np.zeros(timesteps)
+    gcu_shock_series = np.zeros(timesteps)
+
+    # Calculate shock values (1 standard deviation)
+    shock_val_grpe = np.nanstd(table_q4_data['grpe']) if 'grpe' in table_q4_data.columns else 10.0
+    shock_val_grpf = np.nanstd(table_q4_data['grpf']) if 'grpf' in table_q4_data.columns else 5.0
+    shock_val_vu = np.nanstd(table_q4_data['vu']) if 'vu' in table_q4_data.columns else 0.3
+    shock_val_shortage = np.nanstd(table_q4_data['shortage']) if 'shortage' in table_q4_data.columns else 10.0
+    shock_val_excess_demand = np.nanstd(table_q4_data['excess_demand']) if 'excess_demand' in table_q4_data.columns else 0.05
+    shock_val_gscpi = np.nanstd(table_q4_data['gscpi']) if 'gscpi' in table_q4_data.columns else 1.0
+    shock_val_gcu = np.nanstd(table_q4_data['gcu']) if 'gcu' in table_q4_data.columns else 5.0
+
+    print(f"    Shock magnitudes (1 std dev):")
+    print(f"      grpe: {shock_val_grpe:.2f}, grpf: {shock_val_grpf:.2f}, vu: {shock_val_vu:.3f}")
+    print(f"      shortage: {shock_val_shortage:.2f}, excess_demand: {shock_val_excess_demand:.4f}")
+    print(f"      gscpi: {shock_val_gscpi:.2f}, gcu: {shock_val_gcu:.2f}")
+
+    # Run IRF simulation
+    for t in range(4, timesteps):
+
+        # Apply shocks at t=4 (first simulation period)
+        shock_grpe = shock_val_grpe if (add_grpe_shock and t == 4) else 0
+        shock_grpf = shock_val_grpf if (add_grpf_shock and t == 4) else 0
+        shock_vu = shock_val_vu if (add_vu_shock and t == 4) else 0
+        shock_excess_demand = shock_val_excess_demand if (add_excess_demand_shock and t == 4) else 0
+        shock_gscpi = shock_val_gscpi if (add_gscpi_shock and t == 4) else 0
+        shock_gcu = shock_val_gcu if (add_gcu_shock and t == 4) else 0
+
+        # Update exogenous shock series with persistence
+        grpe_shock_series[t] = rho_grpe * grpe_shock_series[t-1] + shock_grpe
+        grpf_shock_series[t] = rho_grpf * grpf_shock_series[t-1] + shock_grpf
+        vu_shock_series[t] = rho_vu * vu_shock_series[t-1] + shock_vu
+        excess_demand_shock_series[t] = rho_excess_demand * excess_demand_shock_series[t-1] + shock_excess_demand
+        gscpi_shock_series[t] = rho_gscpi * gscpi_shock_series[t-1] + shock_gscpi
+        gcu_shock_series[t] = rho_gcu * gcu_shock_series[t-1] + shock_gcu
+
+        # =====================================================================
+        # SHORTAGE EQUATION (NEW - ENDOGENOUS)
+        # Coefficients: [const, L1-L4 shortage, excess_demand L0-L4, gscpi L0-L4]
+        # NOTE: Exclude constant for IRF (measuring deviations from steady state)
+        # =====================================================================
+        if add_shortage_shock and t == 4:
+            # Direct shock to shortage
+            shortage_simul[t] = shock_val_shortage
+        else:
+            shortage_simul[t] = (
+                # shortage_beta[0] +  # constant EXCLUDED for IRF
+                shortage_beta[1] * shortage_simul[t-1] +
+                shortage_beta[2] * shortage_simul[t-2] +
+                shortage_beta[3] * shortage_simul[t-3] +
+                shortage_beta[4] * shortage_simul[t-4] +
+                shortage_beta[5] * excess_demand_shock_series[t] +
+                shortage_beta[6] * excess_demand_shock_series[t-1] +
+                shortage_beta[7] * excess_demand_shock_series[t-2] +
+                shortage_beta[8] * excess_demand_shock_series[t-3] +
+                shortage_beta[9] * excess_demand_shock_series[t-4] +
+                shortage_beta[10] * gscpi_shock_series[t] +
+                shortage_beta[11] * gscpi_shock_series[t-1] +
+                shortage_beta[12] * gscpi_shock_series[t-2] +
+                shortage_beta[13] * gscpi_shock_series[t-3] +
+                shortage_beta[14] * gscpi_shock_series[t-4]
+            )
+
+        # =====================================================================
+        # WAGE EQUATION (MODIFIED - includes capacity utilization)
+        # Coefficients: [const, L1-L4 gw, L1-L4 cf1, L1 magpty, L1-L4 vu,
+        #                L1-L4 diffcpicf, L1-L4 gcu, dummy_q2, dummy_q3]
+        # NOTE: Exclude constant for IRF (measuring deviations from steady state)
+        # =====================================================================
+        gw_simul[t] = (
+            # gw_beta[0] +  # constant EXCLUDED for IRF
+            gw_beta[1] * gw_simul[t-1] +
+            gw_beta[2] * gw_simul[t-2] +
+            gw_beta[3] * gw_simul[t-3] +
+            gw_beta[4] * gw_simul[t-4] +
+            gw_beta[5] * cf1_simul[t-1] +
+            gw_beta[6] * cf1_simul[t-2] +
+            gw_beta[7] * cf1_simul[t-3] +
+            gw_beta[8] * cf1_simul[t-4] +
+            # gw_beta[9] * magpty[t-1] +  # magpty is zero in IRF
+            gw_beta[10] * vu_shock_series[t-1] +
+            gw_beta[11] * vu_shock_series[t-2] +
+            gw_beta[12] * vu_shock_series[t-3] +
+            gw_beta[13] * vu_shock_series[t-4] +
+            gw_beta[14] * diffcpicf_simul[t-1] +
+            gw_beta[15] * diffcpicf_simul[t-2] +
+            gw_beta[16] * diffcpicf_simul[t-3] +
+            gw_beta[17] * diffcpicf_simul[t-4] +
+            gw_beta[18] * gcu_shock_series[t-1] +  # NEW: capacity utilization
+            gw_beta[19] * gcu_shock_series[t-2] +
+            gw_beta[20] * gcu_shock_series[t-3] +
+            gw_beta[21] * gcu_shock_series[t-4]
+            # dummies are zero in IRF
+        )
+
+        # =====================================================================
+        # PRICE EQUATION (same structure as BB)
+        # Coefficients: [const, magpty, L1-L4 gcpi, gw L0-L4, grpe L0-L4,
+        #                grpf L0-L4, shortage L0-L4]
+        # =====================================================================
+        gcpi_simul[t] = (
+            # gcpi_beta[0] +  # constant (ignore for IRF from zero)
+            # gcpi_beta[1] * magpty[t] +  # magpty is zero
+            gcpi_beta[2] * gcpi_simul[t-1] +
+            gcpi_beta[3] * gcpi_simul[t-2] +
+            gcpi_beta[4] * gcpi_simul[t-3] +
+            gcpi_beta[5] * gcpi_simul[t-4] +
+            gcpi_beta[6] * gw_simul[t] +
+            gcpi_beta[7] * gw_simul[t-1] +
+            gcpi_beta[8] * gw_simul[t-2] +
+            gcpi_beta[9] * gw_simul[t-3] +
+            gcpi_beta[10] * gw_simul[t-4] +
+            gcpi_beta[11] * grpe_shock_series[t] +
+            gcpi_beta[12] * grpe_shock_series[t-1] +
+            gcpi_beta[13] * grpe_shock_series[t-2] +
+            gcpi_beta[14] * grpe_shock_series[t-3] +
+            gcpi_beta[15] * grpe_shock_series[t-4] +
+            gcpi_beta[16] * grpf_shock_series[t] +
+            gcpi_beta[17] * grpf_shock_series[t-1] +
+            gcpi_beta[18] * grpf_shock_series[t-2] +
+            gcpi_beta[19] * grpf_shock_series[t-3] +
+            gcpi_beta[20] * grpf_shock_series[t-4] +
+            gcpi_beta[21] * shortage_simul[t] +  # Now using endogenous shortage
+            gcpi_beta[22] * shortage_simul[t-1] +
+            gcpi_beta[23] * shortage_simul[t-2] +
+            gcpi_beta[24] * shortage_simul[t-3] +
+            gcpi_beta[25] * shortage_simul[t-4]
+        )
+
+        # Catch-up term
+        diffcpicf_simul[t] = 0.25 * (gcpi_simul[t] + gcpi_simul[t-1] +
+                                     gcpi_simul[t-2] + gcpi_simul[t-3]) - cf1_simul[t-4]
+
+        # Long-run expectations (cf10)
+        cf10_simul[t] = (
+            cf10_beta[0] * cf10_simul[t-1] +
+            cf10_beta[1] * cf10_simul[t-2] +
+            cf10_beta[2] * cf10_simul[t-3] +
+            cf10_beta[3] * cf10_simul[t-4] +
+            cf10_beta[4] * gcpi_simul[t] +
+            cf10_beta[5] * gcpi_simul[t-1] +
+            cf10_beta[6] * gcpi_simul[t-2] +
+            cf10_beta[7] * gcpi_simul[t-3] +
+            cf10_beta[8] * gcpi_simul[t-4]
+        )
+
+        # Short-run expectations (cf1)
+        cf1_simul[t] = (
+            cf1_beta[0] * cf1_simul[t-1] +
+            cf1_beta[1] * cf1_simul[t-2] +
+            cf1_beta[2] * cf1_simul[t-3] +
+            cf1_beta[3] * cf1_simul[t-4] +
+            cf1_beta[4] * cf10_simul[t] +
+            cf1_beta[5] * cf10_simul[t-1] +
+            cf1_beta[6] * cf10_simul[t-2] +
+            cf1_beta[7] * cf10_simul[t-3] +
+            cf1_beta[8] * cf10_simul[t-4] +
+            cf1_beta[9] * gcpi_simul[t] +
+            cf1_beta[10] * gcpi_simul[t-1] +
+            cf1_beta[11] * gcpi_simul[t-2] +
+            cf1_beta[12] * gcpi_simul[t-3] +
+            cf1_beta[13] * gcpi_simul[t-4]
+        )
+
+    # Create results DataFrame
+    results = pd.DataFrame({
+        'period': np.arange(1, timesteps + 1),
+        'gw_simul': gw_simul,
+        'gcpi_simul': gcpi_simul,
+        'shortage_simul': shortage_simul,
+        'cf1_simul': cf1_simul,
+        'cf10_simul': cf10_simul,
+        'diffcpicf_simul': diffcpicf_simul,
+        'grpe_shock_series': grpe_shock_series,
+        'grpf_shock_series': grpf_shock_series,
+        'vu_shock_series': vu_shock_series,
+        'excess_demand_shock_series': excess_demand_shock_series,
+        'gscpi_shock_series': gscpi_shock_series,
+        'gcu_shock_series': gcu_shock_series
+    })
+
+    return results
+
+
+# %%
+print("\n" + "="*80)
+print("RUNNING IRF SIMULATIONS")
+print("="*80)
+
+# Original BB shocks
+print("\n--- Original BB Shocks ---")
+
+print("\nEnergy prices shock:")
+results_energy = irfs_new_model(
+    data, table_q4_data,
+    shocks={'grpe': True},
+    rho={'grpe': 0.0},
+    coef_path=coef_path
+)
+
+print("\nFood prices shock:")
+results_food = irfs_new_model(
+    data, table_q4_data,
+    shocks={'grpf': True},
+    rho={'grpf': 0.0},
+    coef_path=coef_path
+)
+
+print("\nV/U shock (persistent):")
+results_vu = irfs_new_model(
+    data, table_q4_data,
+    shocks={'vu': True},
+    rho={'vu': 1.0},  # Permanent shock
+    coef_path=coef_path
+)
+
+print("\nShortage shock (direct):")
+results_shortage = irfs_new_model(
+    data, table_q4_data,
+    shocks={'shortage': True},
+    rho={'shortage': 0.0},
+    coef_path=coef_path
+)
+
+# NEW model-specific shocks
+print("\n--- New Model Shocks ---")
+
+print("\nExcess demand shock:")
+results_excess_demand = irfs_new_model(
+    data, table_q4_data,
+    shocks={'excess_demand': True},
+    rho={'excess_demand': 0.0},
+    coef_path=coef_path
+)
+
+print("\nGSCPI shock:")
+results_gscpi = irfs_new_model(
+    data, table_q4_data,
+    shocks={'gscpi': True},
+    rho={'gscpi': 0.0},
+    coef_path=coef_path
+)
+
+print("\nCapacity utilization shock:")
+results_gcu = irfs_new_model(
+    data, table_q4_data,
+    shocks={'gcu': True},
+    rho={'gcu': 0.0},
+    coef_path=coef_path
+)
+
+# Persistent versions
+print("\n--- Persistent Shocks ---")
+
+print("\nExcess demand shock (persistent):")
+results_excess_demand_persistent = irfs_new_model(
+    data, table_q4_data,
+    shocks={'excess_demand': True},
+    rho={'excess_demand': 0.9},
+    coef_path=coef_path
+)
+
+print("\nGSCPI shock (persistent):")
+results_gscpi_persistent = irfs_new_model(
+    data, table_q4_data,
+    shocks={'gscpi': True},
+    rho={'gscpi': 0.9},
+    coef_path=coef_path
+)
+
+print("\nCapacity utilization shock (persistent):")
+results_gcu_persistent = irfs_new_model(
+    data, table_q4_data,
+    shocks={'gcu': True},
+    rho={'gcu': 0.9},
+    coef_path=coef_path
+)
+
+
+# %%
+print("\n" + "="*80)
+print("EXPORTING RESULTS")
+print("="*80)
+
+# Export to Excel
+results_energy.to_excel(output_dir / 'results_energy.xlsx', index=False)
+results_food.to_excel(output_dir / 'results_food.xlsx', index=False)
+results_vu.to_excel(output_dir / 'results_vu.xlsx', index=False)
+results_shortage.to_excel(output_dir / 'results_shortage.xlsx', index=False)
+results_excess_demand.to_excel(output_dir / 'results_excess_demand.xlsx', index=False)
+results_gscpi.to_excel(output_dir / 'results_gscpi.xlsx', index=False)
+results_gcu.to_excel(output_dir / 'results_gcu.xlsx', index=False)
+results_excess_demand_persistent.to_excel(output_dir / 'results_excess_demand_persistent.xlsx', index=False)
+results_gscpi_persistent.to_excel(output_dir / 'results_gscpi_persistent.xlsx', index=False)
+results_gcu_persistent.to_excel(output_dir / 'results_gcu_persistent.xlsx', index=False)
+
+print(f"\nResults saved to: {output_dir}")
+print("  Original BB shocks:")
+print("    - results_energy.xlsx")
+print("    - results_food.xlsx")
+print("    - results_vu.xlsx")
+print("    - results_shortage.xlsx")
+print("  New model shocks:")
+print("    - results_excess_demand.xlsx [NEW]")
+print("    - results_gscpi.xlsx [NEW]")
+print("    - results_gcu.xlsx [NEW]")
+print("  Persistent shocks:")
+print("    - results_excess_demand_persistent.xlsx [NEW]")
+print("    - results_gscpi_persistent.xlsx [NEW]")
+print("    - results_gcu_persistent.xlsx [NEW]")
+
+
+# %%
+# Print summary of IRF responses
+print("\n" + "="*80)
+print("IRF SUMMARY (Peak inflation response)")
+print("="*80)
+
+print(f"\nOriginal BB Shocks:")
+print(f"  Energy shock:     Peak gcpi = {results_energy['gcpi_simul'].max():.4f} at period {results_energy['gcpi_simul'].argmax() + 1}")
+print(f"  Food shock:       Peak gcpi = {results_food['gcpi_simul'].max():.4f} at period {results_food['gcpi_simul'].argmax() + 1}")
+print(f"  V/U shock:        Peak gcpi = {results_vu['gcpi_simul'].max():.4f} at period {results_vu['gcpi_simul'].argmax() + 1}")
+print(f"  Shortage shock:   Peak gcpi = {results_shortage['gcpi_simul'].max():.4f} at period {results_shortage['gcpi_simul'].argmax() + 1}")
+
+print(f"\nNew Model Shocks (one-time):")
+print(f"  Excess demand:    Peak gcpi = {results_excess_demand['gcpi_simul'].max():.4f} at period {results_excess_demand['gcpi_simul'].argmax() + 1}")
+print(f"  GSCPI:            Peak gcpi = {results_gscpi['gcpi_simul'].max():.4f} at period {results_gscpi['gcpi_simul'].argmax() + 1}")
+print(f"  Capacity util:    Peak gcpi = {results_gcu['gcpi_simul'].max():.4f} at period {results_gcu['gcpi_simul'].argmax() + 1}")
+
+print(f"\nNew Model Shocks (persistent, rho=0.9):")
+print(f"  Excess demand:    Peak gcpi = {results_excess_demand_persistent['gcpi_simul'].max():.4f} at period {results_excess_demand_persistent['gcpi_simul'].argmax() + 1}")
+print(f"  GSCPI:            Peak gcpi = {results_gscpi_persistent['gcpi_simul'].max():.4f} at period {results_gscpi_persistent['gcpi_simul'].argmax() + 1}")
+print(f"  Capacity util:    Peak gcpi = {results_gcu_persistent['gcpi_simul'].max():.4f} at period {results_gcu_persistent['gcpi_simul'].argmax() + 1}")
+
+print("\n" + "="*80)
+print("IRF SIMULATIONS COMPLETE!")
+print("="*80)
+print("\n")
+
+# %%
