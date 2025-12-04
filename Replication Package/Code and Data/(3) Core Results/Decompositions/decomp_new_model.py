@@ -609,6 +609,152 @@ print("    - remove_all.xlsx")
 
 
 # %%
+# =============================================================================
+# EXCESS DEMAND COMPONENT ATTRIBUTION
+# =============================================================================
+# excess_demand = log(wages) - log(potential GDP) - log(capacity utilization)
+# We can decompose how much of excess_demand change comes from each component
+print("\n" + "="*80)
+print("COMPUTING EXCESS DEMAND COMPONENT ATTRIBUTION")
+print("="*80)
+
+# Check if we have the component variables
+has_components = all(col in data.columns for col in ['log_wage', 'log_ngdppot', 'log_cu'])
+
+if not has_components:
+    # Try to compute from raw variables if available
+    print("  Computing log components from raw data...")
+    if 'tcu' in data.columns:
+        data['log_cu'] = np.log(data['tcu'])
+    if 'ngdppot' in data.columns:
+        data['log_ngdppot'] = np.log(data['ngdppot'])
+    # Note: log_wage might need to be computed from wage level data
+
+# Compute changes from reference period (Q4 2019 = pre-COVID steady state)
+ref_idx = data[data['period'] >= '2019-10-01'].index[0] if len(data[data['period'] >= '2019-10-01']) > 0 else 4
+
+# Get reference values
+excess_demand_ref = data['excess_demand'].iloc[ref_idx] if 'excess_demand' in data.columns else 0
+
+# Compute excess_demand deviation from reference
+excess_demand_deviation = data['excess_demand'] - excess_demand_ref
+
+# For component attribution, we need to decompose the excess_demand change
+# excess_demand = log(w) - log(ngdppot) - log(cu)
+# Δexcess_demand = Δlog(w) - Δlog(ngdppot) - Δlog(cu)
+
+if 'log_cu' in data.columns and 'log_ngdppot' in data.columns:
+    log_cu_ref = data['log_cu'].iloc[ref_idx]
+    log_ngdppot_ref = data['log_ngdppot'].iloc[ref_idx]
+
+    # Contribution of capacity utilization to excess_demand (negative sign because excess_demand = ... - log(cu))
+    cu_contr_to_ed = -(data['log_cu'] - log_cu_ref)
+
+    # Contribution of potential GDP to excess_demand (negative sign because excess_demand = ... - log(ngdppot))
+    ngdppot_contr_to_ed = -(data['log_ngdppot'] - log_ngdppot_ref)
+
+    # Contribution of wages = residual (excess_demand change - cu contribution - ngdppot contribution)
+    wage_contr_to_ed = excess_demand_deviation - cu_contr_to_ed - ngdppot_contr_to_ed
+
+    print(f"  Reference period: {data['period'].iloc[ref_idx]}")
+    print(f"  Computed component contributions to excess_demand")
+else:
+    # If we don't have components, create proportional attribution based on gcu and gw
+    print("  Using growth rates for proportional attribution...")
+
+    # Use gcu (capacity utilization growth) as proxy for cu contribution
+    # Negative because higher cu growth means lower excess_demand
+    gcu_cumsum = data['gcu'].cumsum() / 100  # Convert to log-like units
+
+    # For wages, we can use gw (wage growth) relative to productivity
+    # Positive because higher wage growth means higher excess_demand
+    gw_cumsum = (data['gw'] - data['magpty']).cumsum() / 100  # Real wage growth
+
+    # Normalize to match total excess_demand change
+    total_change = excess_demand_deviation
+
+    # Simple proportional attribution based on cumulative changes
+    cu_contr_to_ed = -gcu_cumsum  # Higher capacity = lower excess demand
+    wage_contr_to_ed = gw_cumsum   # Higher wages = higher excess demand
+    ngdppot_contr_to_ed = total_change - cu_contr_to_ed - wage_contr_to_ed  # Residual for potential GDP
+
+# Now compute how these components contribute to shortages and inflation
+# The key is: excess_demand → shortage → inflation
+
+# Get the contribution of excess_demand to shortage and inflation from our simulation
+ed_contr_shortage = remove_excess_demand['excess_demand_contr_shortage']
+ed_contr_gcpi = remove_excess_demand['excess_demand_contr_gcpi']
+
+# Proportional attribution of excess_demand contribution to components
+# (based on how much each component contributed to excess_demand deviation)
+total_ed_deviation = excess_demand_deviation.replace(0, np.nan)  # Avoid division by zero
+
+wage_share = wage_contr_to_ed / total_ed_deviation
+cu_share = cu_contr_to_ed / total_ed_deviation
+ngdppot_share = ngdppot_contr_to_ed / total_ed_deviation
+
+# Fill NaN with 0 for early periods
+wage_share = wage_share.fillna(0)
+cu_share = cu_share.fillna(0)
+ngdppot_share = ngdppot_share.fillna(0)
+
+# Compute attributed contributions
+wage_contr_shortage = ed_contr_shortage * wage_share
+cu_contr_shortage = ed_contr_shortage * cu_share
+ngdppot_contr_shortage = ed_contr_shortage * ngdppot_share
+
+wage_contr_gcpi_via_ed = ed_contr_gcpi * wage_share
+cu_contr_gcpi_via_ed = ed_contr_gcpi * cu_share
+ngdppot_contr_gcpi_via_ed = ed_contr_gcpi * ngdppot_share
+
+# Add to baseline dataframe for export
+baseline['wage_contr_to_ed'] = wage_contr_to_ed
+baseline['cu_contr_to_ed'] = cu_contr_to_ed
+baseline['ngdppot_contr_to_ed'] = ngdppot_contr_to_ed
+baseline['wage_contr_shortage'] = wage_contr_shortage
+baseline['cu_contr_shortage'] = cu_contr_shortage
+baseline['ngdppot_contr_shortage'] = ngdppot_contr_shortage
+baseline['wage_contr_gcpi_via_ed'] = wage_contr_gcpi_via_ed
+baseline['cu_contr_gcpi_via_ed'] = cu_contr_gcpi_via_ed
+baseline['ngdppot_contr_gcpi_via_ed'] = ngdppot_contr_gcpi_via_ed
+
+# Also add the gcu contribution through wages (direct effect)
+baseline['gcu_contr_gcpi'] = remove_gcu['gcu_contr_gcpi']
+baseline['gcu_contr_gw'] = remove_gcu['gcu_contr_gw']
+
+# Save updated baseline with component attributions
+baseline.to_excel(output_dir / 'baseline.xlsx', index=False)
+
+# Create separate export for component decomposition
+component_decomp = pd.DataFrame({
+    'period': baseline['period'],
+    # Excess demand components
+    'excess_demand': baseline['excess_demand'],
+    'excess_demand_deviation': excess_demand_deviation,
+    'wage_contr_to_ed': wage_contr_to_ed,
+    'cu_contr_to_ed': cu_contr_to_ed,
+    'ngdppot_contr_to_ed': ngdppot_contr_to_ed,
+    # Contributions to shortage
+    'ed_contr_shortage': ed_contr_shortage,
+    'wage_contr_shortage': wage_contr_shortage,
+    'cu_contr_shortage': cu_contr_shortage,
+    'ngdppot_contr_shortage': ngdppot_contr_shortage,
+    # Contributions to inflation via excess demand
+    'ed_contr_gcpi': ed_contr_gcpi,
+    'wage_contr_gcpi_via_ed': wage_contr_gcpi_via_ed,
+    'cu_contr_gcpi_via_ed': cu_contr_gcpi_via_ed,
+    'ngdppot_contr_gcpi_via_ed': ngdppot_contr_gcpi_via_ed,
+    # Direct capacity util effect on inflation (via wages)
+    'gcu_contr_gcpi_direct': remove_gcu['gcu_contr_gcpi'],
+    'gcu_contr_gw': remove_gcu['gcu_contr_gw'],
+    # Total capacity util effect on inflation (direct + via shortage)
+    'cu_total_contr_gcpi': remove_gcu['gcu_contr_gcpi'] + cu_contr_gcpi_via_ed
+})
+
+component_decomp.to_excel(output_dir / 'excess_demand_components.xlsx', index=False)
+print(f"\n  Saved excess_demand_components.xlsx")
+
+# %%
 # Print summary
 print("\n" + "="*80)
 print("DECOMPOSITION SUMMARY")

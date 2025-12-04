@@ -719,6 +719,382 @@ if abs(total_shortage_change) > 0.01:
         print(f"  -> Supply-chain factors were the PRIMARY driver of shortages")
 
 
+# %%
+# =============================================================================
+# FIGURE 18 (NEW): EXCESS DEMAND COMPONENT ATTRIBUTION TO SHORTAGES
+# Shows how wages, capacity utilization, and potential GDP contribute to
+# the excess demand component of shortages
+# =============================================================================
+print("\nCreating Figure 18: Excess Demand Components - Contribution to Shortages...")
+
+# Try to load the component decomposition data
+try:
+    component_decomp = pd.read_excel(input_dir / 'excess_demand_components.xlsx')
+    if not pd.api.types.is_datetime64_any_dtype(component_decomp['period']):
+        component_decomp['period'] = pd.to_datetime(component_decomp['period'])
+    component_decomp = component_decomp[component_decomp['period'] >= filter_date].copy().reset_index(drop=True)
+    has_component_data = True
+    print(f"  Loaded component decomposition data: {len(component_decomp)} observations")
+except FileNotFoundError:
+    print("  WARNING: excess_demand_components.xlsx not found. Run decomp_new_model.py first.")
+    has_component_data = False
+
+if has_component_data:
+    # Define colors for excess demand components
+    ed_component_colors = {
+        'Wages': '#D55E00',           # Vermillion
+        'Capacity Util': '#0072B2',   # Blue
+        'Potential GDP': '#009E73',   # Teal
+        'Initial Conditions': '#888888'
+    }
+
+    # Stack order for ED components
+    stack_order_ed = ['Initial Conditions', 'Potential GDP', 'Capacity Util', 'Wages']
+
+    # Create decomposition of excess demand contribution to shortage
+    # The excess demand contribution to shortage is split by its components
+    decomp_ed_to_shortage = pd.DataFrame({
+        'period': component_decomp['period'],
+        'Initial Conditions': np.zeros(len(component_decomp)),  # No initial conditions for this
+        'Wages': component_decomp['wage_contr_shortage'],
+        'Capacity Util': component_decomp['cu_contr_shortage'],
+        'Potential GDP': component_decomp['ngdppot_contr_shortage']
+    })
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    x = np.arange(len(decomp_ed_to_shortage))
+    width = 0.6
+
+    bottom_pos = np.zeros(len(decomp_ed_to_shortage))
+    bottom_neg = np.zeros(len(decomp_ed_to_shortage))
+
+    for component in stack_order_ed:
+        values = decomp_ed_to_shortage[component].values
+        values = np.nan_to_num(values, nan=0.0)
+        pos_vals = np.where(values >= 0, values, 0)
+        neg_vals = np.where(values < 0, values, 0)
+
+        ax.bar(x, pos_vals, width, bottom=bottom_pos, label=component,
+               color=ed_component_colors[component], edgecolor='white', linewidth=0.5)
+        bottom_pos += pos_vals
+
+        ax.bar(x, neg_vals, width, bottom=bottom_neg,
+               color=ed_component_colors[component], edgecolor='white', linewidth=0.5)
+        bottom_neg += neg_vals
+
+    # Add total excess demand contribution line
+    total_ed_contr = component_decomp['ed_contr_shortage'].values
+    ax.plot(x, total_ed_contr, color='black', linewidth=2, label='Total Excess Demand Contribution',
+            marker='', zorder=10)
+
+    ax.set_title('Excess demand contribution to shortages\n(decomposed by wages, capacity utilization, potential GDP)',
+                 fontsize=15, fontweight='normal')
+    ax.set_xlabel('Quarter', fontsize=16)
+    ax.set_ylabel('Shortage Index Points', fontsize=16)
+
+    tick_positions_ed = x[::2]
+    tick_labels_ed = [period_to_quarter_label(p) for p in component_decomp['period']]
+    tick_labels_subset_ed = [tick_labels_ed[i] for i in tick_positions_ed]
+    ax.set_xticks(tick_positions_ed)
+    ax.set_xticklabels(tick_labels_subset_ed, rotation=0, ha='center')
+
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+    legend_order_ed = list(reversed(stack_order_ed[1:]))  # Skip initial conditions
+    handles = [mpatches.Patch(color=ed_component_colors[comp], label=comp) for comp in legend_order_ed]
+    handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Total ED Contribution'))
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
+              ncol=4, frameon=True, edgecolor='black', fancybox=False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_18_ed_components_shortage.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_18_ed_components_shortage.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_18_ed_components_shortage.png'}")
+    plt.show()
+
+
+# %%
+# =============================================================================
+# FIGURE 19 (NEW): EXCESS DEMAND COMPONENT ATTRIBUTION TO INFLATION
+# Shows how wages, capacity utilization, and potential GDP contribute to
+# inflation through the excess demand → shortage → inflation channel
+# =============================================================================
+if has_component_data:
+    print("\nCreating Figure 19: Excess Demand Components - Contribution to Inflation...")
+
+    # Create decomposition of excess demand contribution to inflation
+    decomp_ed_to_inflation = pd.DataFrame({
+        'period': component_decomp['period'],
+        'Initial Conditions': np.zeros(len(component_decomp)),
+        'Wages': component_decomp['wage_contr_gcpi_via_ed'],
+        'Capacity Util': component_decomp['cu_contr_gcpi_via_ed'],
+        'Potential GDP': component_decomp['ngdppot_contr_gcpi_via_ed']
+    })
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    bottom_pos = np.zeros(len(decomp_ed_to_inflation))
+    bottom_neg = np.zeros(len(decomp_ed_to_inflation))
+
+    for component in stack_order_ed:
+        values = decomp_ed_to_inflation[component].values
+        values = np.nan_to_num(values, nan=0.0)
+        pos_vals = np.where(values >= 0, values, 0)
+        neg_vals = np.where(values < 0, values, 0)
+
+        ax.bar(x, pos_vals, width, bottom=bottom_pos, label=component,
+               color=ed_component_colors[component], edgecolor='white', linewidth=0.5)
+        bottom_pos += pos_vals
+
+        ax.bar(x, neg_vals, width, bottom=bottom_neg,
+               color=ed_component_colors[component], edgecolor='white', linewidth=0.5)
+        bottom_neg += neg_vals
+
+    # Add total excess demand contribution to inflation line
+    total_ed_contr_gcpi = component_decomp['ed_contr_gcpi'].values
+    ax.plot(x, total_ed_contr_gcpi, color='black', linewidth=2,
+            label='Total Excess Demand Contribution', marker='', zorder=10)
+
+    ax.set_title('Excess demand contribution to inflation\n(via shortage channel, decomposed by components)',
+                 fontsize=15, fontweight='normal')
+    ax.set_xlabel('Quarter', fontsize=16)
+    ax.set_ylabel('Percent', fontsize=16)
+
+    ax.set_xticks(tick_positions_ed)
+    ax.set_xticklabels(tick_labels_subset_ed, rotation=0, ha='center')
+
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+    handles = [mpatches.Patch(color=ed_component_colors[comp], label=comp) for comp in legend_order_ed]
+    handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Total ED Contribution'))
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
+              ncol=4, frameon=True, edgecolor='black', fancybox=False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_19_ed_components_inflation.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_19_ed_components_inflation.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_19_ed_components_inflation.png'}")
+    plt.show()
+
+
+# %%
+# =============================================================================
+# FIGURE 20 (NEW): CAPACITY UTILIZATION TOTAL EFFECT ON INFLATION
+# Shows both direct effect (via wages) and indirect effect (via excess demand → shortage)
+# =============================================================================
+if has_component_data:
+    print("\nCreating Figure 20: Capacity Utilization Total Effect on Inflation...")
+
+    # Capacity utilization affects inflation through two channels:
+    # 1. Direct: gcu → wages → inflation  (remove_gcu['gcu_contr_gcpi'])
+    # 2. Indirect: gcu → excess_demand → shortage → inflation (cu_contr_gcpi_via_ed)
+
+    decomp_cu_inflation = pd.DataFrame({
+        'period': component_decomp['period'],
+        'Direct (via wages)': component_decomp['gcu_contr_gcpi_direct'],
+        'Indirect (via shortages)': component_decomp['cu_contr_gcpi_via_ed']
+    })
+
+    cu_colors = {
+        'Direct (via wages)': '#0072B2',        # Blue
+        'Indirect (via shortages)': '#56B4E9'   # Sky blue
+    }
+
+    stack_order_cu = ['Direct (via wages)', 'Indirect (via shortages)']
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    bottom_pos = np.zeros(len(decomp_cu_inflation))
+    bottom_neg = np.zeros(len(decomp_cu_inflation))
+
+    for component in stack_order_cu:
+        values = decomp_cu_inflation[component].values
+        values = np.nan_to_num(values, nan=0.0)
+        pos_vals = np.where(values >= 0, values, 0)
+        neg_vals = np.where(values < 0, values, 0)
+
+        ax.bar(x, pos_vals, width, bottom=bottom_pos, label=component,
+               color=cu_colors[component], edgecolor='white', linewidth=0.5)
+        bottom_pos += pos_vals
+
+        ax.bar(x, neg_vals, width, bottom=bottom_neg,
+               color=cu_colors[component], edgecolor='white', linewidth=0.5)
+        bottom_neg += neg_vals
+
+    # Add total capacity utilization contribution
+    total_cu_contr = component_decomp['cu_total_contr_gcpi'].values
+    ax.plot(x, total_cu_contr, color='black', linewidth=2,
+            label='Total Capacity Util Effect', marker='', zorder=10)
+
+    ax.set_title('Capacity utilization contribution to inflation\n(direct via wages + indirect via shortages)',
+                 fontsize=15, fontweight='normal')
+    ax.set_xlabel('Quarter', fontsize=16)
+    ax.set_ylabel('Percent', fontsize=16)
+
+    ax.set_xticks(tick_positions_ed)
+    ax.set_xticklabels(tick_labels_subset_ed, rotation=0, ha='center')
+
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+    legend_order_cu = list(reversed(stack_order_cu))
+    handles = [mpatches.Patch(color=cu_colors[comp], label=comp) for comp in legend_order_cu]
+    handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Total CU Effect'))
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.10),
+              ncol=3, frameon=True, edgecolor='black', fancybox=False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_20_cu_total_inflation.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_20_cu_total_inflation.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_20_cu_total_inflation.png'}")
+    plt.show()
+
+
+# %%
+# =============================================================================
+# FIGURE 21 (NEW): COMBINED 2-PANEL - ED Components to Shortage and Inflation
+# =============================================================================
+if has_component_data:
+    print("\nCreating Figure 21: Combined ED Components Panel...")
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+    # Left panel: ED components to shortages
+    ax1 = axes[0]
+    bottom_pos = np.zeros(len(decomp_ed_to_shortage))
+    bottom_neg = np.zeros(len(decomp_ed_to_shortage))
+
+    for component in stack_order_ed[1:]:  # Skip initial conditions
+        values = decomp_ed_to_shortage[component].values
+        values = np.nan_to_num(values, nan=0.0)
+        pos_vals = np.where(values >= 0, values, 0)
+        neg_vals = np.where(values < 0, values, 0)
+        ax1.bar(x, pos_vals, width, bottom=bottom_pos, color=ed_component_colors[component], edgecolor='white', linewidth=0.3)
+        bottom_pos += pos_vals
+        ax1.bar(x, neg_vals, width, bottom=bottom_neg, color=ed_component_colors[component], edgecolor='white', linewidth=0.3)
+        bottom_neg += neg_vals
+
+    ax1.plot(x, component_decomp['ed_contr_shortage'].values, color='black', linewidth=2, zorder=10)
+    ax1.set_title('(A) Excess Demand → Shortages', fontsize=14, fontweight='bold')
+    ax1.set_xlabel('Quarter', fontsize=12)
+    ax1.set_ylabel('Shortage Index Points', fontsize=12)
+    ax1.set_xticks(tick_positions_ed)
+    ax1.set_xticklabels(tick_labels_subset_ed, rotation=0, ha='center', fontsize=10)
+    ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+    ax1.set_axisbelow(True)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+    # Right panel: ED components to inflation
+    ax2 = axes[1]
+    bottom_pos = np.zeros(len(decomp_ed_to_inflation))
+    bottom_neg = np.zeros(len(decomp_ed_to_inflation))
+
+    for component in stack_order_ed[1:]:  # Skip initial conditions
+        values = decomp_ed_to_inflation[component].values
+        values = np.nan_to_num(values, nan=0.0)
+        pos_vals = np.where(values >= 0, values, 0)
+        neg_vals = np.where(values < 0, values, 0)
+        ax2.bar(x, pos_vals, width, bottom=bottom_pos, color=ed_component_colors[component], edgecolor='white', linewidth=0.3)
+        bottom_pos += pos_vals
+        ax2.bar(x, neg_vals, width, bottom=bottom_neg, color=ed_component_colors[component], edgecolor='white', linewidth=0.3)
+        bottom_neg += neg_vals
+
+    ax2.plot(x, component_decomp['ed_contr_gcpi'].values, color='black', linewidth=2, zorder=10)
+    ax2.set_title('(B) Excess Demand → Inflation (via Shortages)', fontsize=14, fontweight='bold')
+    ax2.set_xlabel('Quarter', fontsize=12)
+    ax2.set_ylabel('Percent', fontsize=12)
+    ax2.set_xticks(tick_positions_ed)
+    ax2.set_xticklabels(tick_labels_subset_ed, rotation=0, ha='center', fontsize=10)
+    ax2.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+    ax2.set_axisbelow(True)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+    # Combined legend
+    legend_comps = ['Wages', 'Capacity Util', 'Potential GDP']
+    handles = [mpatches.Patch(color=ed_component_colors[comp], label=comp) for comp in legend_comps]
+    handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Total'))
+
+    fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.02),
+               ncol=4, frameon=True, edgecolor='black', fancybox=False, fontsize=11)
+
+    plt.suptitle('Decomposition of Excess Demand Effects (Modified Model)',
+                 fontsize=16, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_21_ed_components_combined.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_21_ed_components_combined.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_21_ed_components_combined.png'}")
+    plt.show()
+
+
+# %%
+# =============================================================================
+# COMPONENT ATTRIBUTION SUMMARY STATISTICS
+# =============================================================================
+if has_component_data:
+    print("\n" + "="*80)
+    print("EXCESS DEMAND COMPONENT ATTRIBUTION SUMMARY")
+    print("="*80)
+
+    # Filter to COVID period
+    covid_mask_comp = component_decomp['period'] >= '2020-01-01'
+
+    print(f"\nCumulative contribution to SHORTAGES (2020+):")
+    print("-"*60)
+    wage_contr_short = component_decomp.loc[covid_mask_comp, 'wage_contr_shortage'].sum()
+    cu_contr_short = component_decomp.loc[covid_mask_comp, 'cu_contr_shortage'].sum()
+    ngdppot_contr_short = component_decomp.loc[covid_mask_comp, 'ngdppot_contr_shortage'].sum()
+    total_ed_short = component_decomp.loc[covid_mask_comp, 'ed_contr_shortage'].sum()
+
+    print(f"  Wages:          {wage_contr_short:7.2f} index points")
+    print(f"  Capacity Util:  {cu_contr_short:7.2f} index points")
+    print(f"  Potential GDP:  {ngdppot_contr_short:7.2f} index points")
+    print(f"  ─────────────────────────────────")
+    print(f"  Total ED:       {total_ed_short:7.2f} index points")
+
+    print(f"\nCumulative contribution to INFLATION (2020+, via excess demand → shortage):")
+    print("-"*60)
+    wage_contr_gcpi = component_decomp.loc[covid_mask_comp, 'wage_contr_gcpi_via_ed'].sum()
+    cu_contr_gcpi = component_decomp.loc[covid_mask_comp, 'cu_contr_gcpi_via_ed'].sum()
+    ngdppot_contr_gcpi = component_decomp.loc[covid_mask_comp, 'ngdppot_contr_gcpi_via_ed'].sum()
+    total_ed_gcpi = component_decomp.loc[covid_mask_comp, 'ed_contr_gcpi'].sum()
+
+    print(f"  Wages:          {wage_contr_gcpi:7.2f} percentage points")
+    print(f"  Capacity Util:  {cu_contr_gcpi:7.2f} percentage points")
+    print(f"  Potential GDP:  {ngdppot_contr_gcpi:7.2f} percentage points")
+    print(f"  ─────────────────────────────────")
+    print(f"  Total ED:       {total_ed_gcpi:7.2f} percentage points")
+
+    print(f"\nCapacity utilization TOTAL effect on inflation (2020+):")
+    print("-"*60)
+    cu_direct = component_decomp.loc[covid_mask_comp, 'gcu_contr_gcpi_direct'].sum()
+    cu_indirect = component_decomp.loc[covid_mask_comp, 'cu_contr_gcpi_via_ed'].sum()
+    cu_total = component_decomp.loc[covid_mask_comp, 'cu_total_contr_gcpi'].sum()
+
+    print(f"  Direct (via wages):       {cu_direct:7.2f} percentage points")
+    print(f"  Indirect (via shortages): {cu_indirect:7.2f} percentage points")
+    print(f"  ─────────────────────────────────")
+    print(f"  Total CU effect:          {cu_total:7.2f} percentage points")
+
+
 print("\n" + "="*80)
 print("PLOTTING COMPLETE!")
 print("="*80)
@@ -729,6 +1105,10 @@ print("  - figure_14_shortage_decomposition.png/pdf")
 print("  - figure_15_alt_inflation_decomposition.png/pdf  [NEW: Excess Demand + GSCPI + CapUtil]")
 print("  - figure_16_comparison_decomposition.png/pdf     [NEW: Side-by-side comparison]")
 print("  - figure_17_combined_decomposition.png/pdf")
+print("  - figure_18_ed_components_shortage.png/pdf       [NEW: ED components → Shortages]")
+print("  - figure_19_ed_components_inflation.png/pdf      [NEW: ED components → Inflation]")
+print("  - figure_20_cu_total_inflation.png/pdf           [NEW: CU total effect on inflation]")
+print("  - figure_21_ed_components_combined.png/pdf       [NEW: Combined panel]")
 print("\n")
 
 # %%
