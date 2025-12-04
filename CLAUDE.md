@@ -4,7 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a replication package for the paper "What Caused U.S. Pandemic-Era Inflation?" by Ben Bernanke and Olivier Blanchard. The package recreates empirical results, figures, and tables using a multi-language econometric analysis workflow.
+This repository contains both a replication of Bernanke and Blanchard (2023) "What Caused U.S. Pandemic-Era Inflation?" and an **extended "New Model"** that modifies the original SVAR framework. The package recreates empirical results, figures, and tables using a multi-language econometric analysis workflow.
+
+## New Model vs. Original Bernanke-Blanchard
+
+The repository includes an alternative model specification (see `new_model.tex`) with the following key changes:
+
+### 1. Wage Equation: Added Capacity Utilization
+**Original BB:** Wages depend on expected prices, aspirational real wage, and labor market tightness (V/U).
+
+**New Model:** Adds **capacity utilization** as a driver of wages. Rationale: when manufacturing operates at higher capacity, it puts upward pressure on wages beyond labor market tightness alone.
+
+### 2. Price Equation: Endogenized Shortages
+**Original BB:** Shortages are treated as **exogenous** (measured via Google Trends).
+
+**New Model:** Shortages are now **endogenous** and decomposed:
+```
+log(s_t) = φ·log(s_{t-1}) + ψ·[log(w_t) - log(ρ_t) - log(u_t)] + ξ·log(g_t)
+```
+Where:
+- `w_t - ρ_t - u_t` = excess demand pressure (wages relative to effective capacity)
+- `g_t` = NY Fed GSCPI supply chain pressure index
+- `ρ_t` = Nominal Potential GDP
+
+### 3. New Exogenous Variables
+| Variable | Data Source |
+|----------|-------------|
+| Capacity Utilization (`capu`) | FRED Total Capacity Utilization Index |
+| Nominal Potential GDP (`ngdppot`) | FRED NGDPPOT |
+| Supply Chain Pressure (`gscpi`) | NY Fed Global Supply Chain Pressure Index |
+
+### 4. Inflation Expectations
+**Unchanged** from original BB - same linear updating rules for short-run and long-run expectations.
+
+### New Model Files
+- `regression_new_model.py`: Python implementation of new model regressions
+- `regression_new_model_pre_covid.py`: Pre-COVID sample estimation
+- `plot_pred_v_actual_new_model.py`: Prediction vs actual plots for new model
+- `cond_forecast_new_model.py`: Conditional forecasts with new model
+- Output directories with `(New Model)` suffix contain results from the extended specification
 
 ## Software Requirements
 
@@ -175,15 +213,21 @@ The model is a Structural Vector Autoregression (SVAR) with four equations:
 3. **Productivity equation**: Output per hour
 4. **Expectations equation**: Inflation expectations
 
-Key variables:
+Key variables (Original BB):
 - `gcpi`: CPI inflation (annualized quarterly)
 - `gw`: Wage growth
 - `gpty`: Productivity growth
 - `grpe`, `grpf`: Relative prices (energy, food)
 - `vu`: Vacancy-to-unemployment ratio (V/U)
 - `cf1`, `cf10`: 1-year and 10-year inflation expectations
-- `shortage`: Supply chain shortage measure
+- `shortage`: Supply chain shortage measure (exogenous in BB)
 - `diffcpicf`: Catch-up term (inflation minus lagged expectations)
+
+Additional variables (New Model):
+- `capu`: Capacity utilization (FRED Total Index)
+- `ngdppot`: Nominal potential GDP (FRED NGDPPOT)
+- `gscpi`: NY Fed Global Supply Chain Pressure Index
+- `shortage`: Now endogenous, decomposed into excess demand and supply chain components
 
 ### COVID-19 Period Handling
 
@@ -229,8 +273,9 @@ dynare Simple_Eq_simulations_strong.mod
 
 ## Data Sources
 
-- **FRED** (Federal Reserve Bank of St. Louis): Most macroeconomic data
-- **Google Trends**: Shortage search measure
+- **FRED** (Federal Reserve Bank of St. Louis): Most macroeconomic data, including capacity utilization and nominal potential GDP
+- **Google Trends**: Shortage search measure (exogenous in original BB)
+- **NY Fed**: Global Supply Chain Pressure Index (GSCPI) - used in new model
 - **Bloomberg**: Commodity futures prices (private, requires terminal access)
 - **Haver Analytics**: S&P GSCI indices (private, requires subscription)
 - **Survey of Professional Forecasters**: Inflation expectations (public)
