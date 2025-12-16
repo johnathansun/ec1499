@@ -1,5 +1,16 @@
 # New Model Regression Specification
 
+### Other Notes
+
+1. Original BB paper says productivity growth is lagged ($gpty_{t-1}$) in both wage and price equation. Looking at the Stata, the contemporaneous version is used in the price equation, while the lagged version is used in the wage equation
+2. Detrended series: capacity utilization and excess demand, both by subtracting rolling 10Y mean
+
+   1. Capacity utilization has decreased over time
+   2. Excess demand is decreasing since potential GDP increasing faster than wages. Might be plausible since labor share of income has fallen since the 80s; productivity growing faster than real wages for many workers; globalization, weaker unions, all this kind of stuff shifts income from wages to profits.
+3. 
+
+### New reg spec
+
 This document describes the regressions estimated in `regression_new_model_merged.py`.
 
 ## Equations
@@ -76,28 +87,28 @@ $$
 
 ## Variable Definitions and Units
 
-| Variable           | Definition                                                                     | Units                                   | Source              |
-| ------------------ | ------------------------------------------------------------------------------ | --------------------------------------- | ------------------- |
-| $gcpi_t$         | $400 \times [\ln(CPI_t) - \ln(CPI_{t-1})]$                                   | Percent per year (annualized)           | FRED CPIAUCSL       |
-| $gw_t$           | $400 \times [\ln(ECI_t) - \ln(ECI_{t-1})]$                                   | Percent per year (annualized)           | FRED ECIWAG         |
-| $gpty_t$         | $400 \times [\ln(OPHNFB_t) - \ln(OPHNFB_{t-1})]$                             | Percent per year (annualized)           | FRED OPHNFB         |
-| $magpty_t$       | $\frac{1}{8} \sum_{i=0}^{7} gpty_{t-i}$                                      | Percent per year                        | Derived             |
-| $grpe_t$         | $400 \times [\ln(rpe_t) - \ln(rpe_{t-1})]$ where $rpe = CPIENGSL / ECIWAG$ | Percent per year (annualized)           | Derived             |
-| $grpf_t$         | $400 \times [\ln(rpf_t) - \ln(rpf_{t-1})]$ where $rpf = CPIUFDSL / ECIWAG$ | Percent per year (annualized)           | Derived             |
-| $vu_t$           | Vacancy-to-unemployment ratio                                                  | Ratio (unitless)                        | FRED VOVERU         |
-| $cf1_t$          | 1-year ahead inflation expectations                                            | Percent                                 | Cleveland Fed       |
-| $cf10_t$         | 10-year ahead inflation expectations                                           | Percent                                 | Cleveland Fed       |
-| $shortage_t$     | Google Trends "shortage" search index (missing filled with 5)                  | Index (unitless)                        | Google Trends       |
-| $diffcpicf_t$    | $\frac{1}{4} \sum_{i=0}^{3} gcpi_{t-i} - cf1_{t-4}$                          | Percent                                 | Derived             |
-| $cu_t$           | $\ln(TCU_t) - \ln(\bar{TCU}_t^{10yr})$ where $\bar{TCU}_t^{10yr}$ is 10-year rolling mean | Log deviation from trend (unitless) | Derived from FRED TCU |
-| $excessdemand_t$ | Standardized and detrended: $\frac{x_t - \bar{x}}{\sigma_x}$ where $x_t = [\ln(ECIWAG_t) - \ln(NGDPPOT_t) - cu_t] - \bar{x}_t^{40q}$ and $\bar{x}_t^{40q}$ is a 40-quarter rolling mean | Standard deviations from mean | Derived             |
-| $gscpi_t$        | Global Supply Chain Pressure Index                                             | Standard deviations from mean           | NY Fed              |
+| Variable           | Definition                                                                                                                                                                                             | Units                               | Source                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- | --------------------- |
+| $gcpi_t$         | $400 \times [\ln(CPI_t) - \ln(CPI_{t-1})]$                                                                                                                                                           | Percent per year (annualized)       | FRED CPIAUCSL         |
+| $gw_t$           | $400 \times [\ln(ECI_t) - \ln(ECI_{t-1})]$                                                                                                                                                           | Percent per year (annualized)       | FRED ECIWAG           |
+| $gpty_t$         | $400 \times [\ln(OPHNFB_t) - \ln(OPHNFB_{t-1})]$                                                                                                                                                     | Percent per year (annualized)       | FRED OPHNFB           |
+| $magpty_t$       | $\frac{1}{8} \sum_{i=0}^{7} gpty_{t-i}$                                                                                                                                                              | Percent per year                    | Derived               |
+| $grpe_t$         | $400 \times [\ln(rpe_t) - \ln(rpe_{t-1})]$ where $rpe = CPIENGSL / ECIWAG$                                                                                                                         | Percent per year (annualized)       | Derived               |
+| $grpf_t$         | $400 \times [\ln(rpf_t) - \ln(rpf_{t-1})]$ where $rpf = CPIUFDSL / ECIWAG$                                                                                                                         | Percent per year (annualized)       | Derived               |
+| $vu_t$           | Vacancy-to-unemployment ratio                                                                                                                                                                          | Ratio (unitless)                    | FRED VOVERU           |
+| $cf1_t$          | 1-year ahead inflation expectations                                                                                                                                                                    | Percent                             | Cleveland Fed         |
+| $cf10_t$         | 10-year ahead inflation expectations                                                                                                                                                                   | Percent                             | Cleveland Fed         |
+| $shortage_t$     | Google Trends "shortage" search index (missing filled with 5)                                                                                                                                          | Index (unitless)                    | Google Trends         |
+| $diffcpicf_t$    | $\frac{1}{4} \sum_{i=0}^{3} gcpi_{t-i} - cf1_{t-4}$                                                                                                                                                  | Percent                             | Derived               |
+| $cu_t$           | $\ln(TCU_t/100) - \ln(\bar{TCU}_t^{10yr}/100)$ where $\bar{TCU}_t^{10yr}$ is 10-year rolling mean of TCU                                                                                           | Log deviation from trend (unitless) | Derived from FRED TCU |
+| $excessdemand_t$ | Standardized and detrended: $\frac{x_t - \bar{x}}{\sigma_x}$ where $x_t = [\ln(ECIWAG_t) - \ln(NGDPPOT_t) - \ln(TCU_t/100)] - \bar{x}_t^{40q}$ and $\bar{x}_t^{40q}$ is a 40-quarter rolling mean | Standard deviations from mean       | Derived               |
+| $gscpi_t$        | Global Supply Chain Pressure Index                                                                                                                                                                     | Standard deviations from mean       | NY Fed                |
 
 ---
 
 ## Notes
 
-1. **TCU usage:** Capacity utilization is detrended in-script as $cu_t = \ln(TCU_t) - \ln(\bar{TCU}_t^{10yr})$. This detrended level enters both the wage equation (as lags) and the shortage equation (via excess demand).
+1. **TCU usage:** Capacity utilization is detrended in-script as $cu_t = \ln(TCU_t/100) - \ln(\bar{TCU}_t^{10yr}/100)$. The detrended $cu_t$ enters the wage equation (as lags). For excess demand, we use raw $\ln(TCU_t/100)$ (not detrended), then detrend and standardize the final excess demand variable.
 2. **Sample periods:**
 
    - `USE_PRE_COVID_SAMPLE = False`: All equations use full sample (1989 Q1 - 2023 Q2)

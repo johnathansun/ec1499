@@ -30,7 +30,7 @@ warnings.filterwarnings('ignore')
 #****************************CONFIGURATION**************************************
 
 # Set to True for pre-COVID sample estimation, False for full sample
-USE_PRE_COVID_SAMPLE = False
+USE_PRE_COVID_SAMPLE = True
 
 #****************************CHANGE PATH HERE***********************************
 
@@ -158,12 +158,12 @@ df['log_ngdppot'] = np.log(df['ngdppot'])
 df['log_w'] = np.log(df['ECIWAG'])
 
 # Detrend capacity utilization: log(TCU) - log(10-year rolling mean of TCU)
-df['log_tcu'] = np.log(df['tcu'])
-df['log_tcu_trend'] = np.log(df['tcu'].rolling(window=40, min_periods=20).mean())
+df['log_tcu'] = np.log(df['tcu']/100)
+df['log_tcu_trend'] = np.log(df['tcu'].rolling(window=40, min_periods=20).mean()/100)
 df['cu'] = df['log_tcu'] - df['log_tcu_trend']
 
-# Excess demand proxy (uses detrended capacity utilization)
-df['excess_demand'] = df['log_w'] - df['log_ngdppot'] - df['cu']
+# Excess demand proxy (uses raw log TCU, then detrend excess demand itself)
+df['excess_demand'] = df['log_w'] - df['log_ngdppot'] - df['log_tcu']
 df['excess_demand_trend'] = df['excess_demand'].rolling(window=40).mean()
 
 df['excess_demand'] = df['excess_demand'] - df['excess_demand_trend']
@@ -179,17 +179,8 @@ print(f"  Std:  {df['excess_demand'].std():.4f}")
 # sns.lineplot(x='period', y='log_w', data=df, label='Log W')
 # sns.lineplot(x='period', y='log_ngdppot', data=df, label='Log NGDPPOT')
 # sns.lineplot(x='period', y='cu', data=df, label='CU')
+# sns.lineplot(x='period', y='cu', data=df, label='Log TCU')
 
-# sns.lineplot(x='period', y='shortage', data=df, label='Shortage')
-
-# df_plot = df.copy()
-# df_plot.set_index('period', inplace=True)
-# sns.lineplot(x=df_plot.index, y=df_plot.excess_demand - df_plot.excess_demand.rolling(window=20).mean())
-
-# sns.lineplot(x=df_plot.index, y=df_plot.excess_demand)
-
-
-# %%
 
 # %%
 # Filter to sample period: 1989 Q1 to 2023 Q2
