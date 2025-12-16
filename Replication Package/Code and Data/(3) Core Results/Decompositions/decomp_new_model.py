@@ -8,7 +8,7 @@ Liang & Sun (2025)
 This script generates decomposition analysis for the modified model.
 
 Key modifications from original:
-1. Wage equation includes capacity utilization (gcu)
+1. Wage equation includes detrended capacity utilization level (cu)
 2. Shortage is ENDOGENOUS: shortage = f(lagged_shortage, excess_demand, GSCPI)
 3. New decomposition channels:
    - Excess demand contribution to shortages (and thus inflation)
@@ -22,7 +22,7 @@ Shocks analyzed:
 - Shortages (total) - now endogenous
 - Excess demand component of shortages [NEW]
 - GSCPI component of shortages [NEW]
-- Capacity utilization [NEW]
+- Capacity utilization (cu) [NEW]
 - Productivity (magpty)
 - Q2 2020 dummy
 - Q3 2020 dummy
@@ -88,17 +88,23 @@ def dynamic_simul_new_model(data, coef_path,
                              remove_grpe=False, remove_grpf=False,
                              remove_vu=False, remove_shortage=False,
                              remove_excess_demand=False, remove_gscpi=False,
-                             remove_gcu=False, remove_magpty=False,
+                             remove_cu=False, remove_magpty=False,
                              remove_dummy2020_q2=False, remove_dummy2020_q3=False):
     """
     Run dynamic simulation for the modified model with specified shocks removed.
 
-    NEW parameters:
-    - remove_excess_demand: Remove excess demand contribution to shortage equation
-    - remove_gscpi: Remove GSCPI contribution to shortage equation
-    - remove_gcu: Remove capacity utilization from wage equation
+    KEY CHANGE: Excess demand is now ENDOGENOUS in counterfactual simulations.
+    When wages change (due to removing V/U, CU, etc.), the wage level changes,
+    which changes excess demand, which changes shortages.
 
-    The key difference from original: shortage is now ENDOGENOUS and simulated dynamically.
+    Causal chain: shock → wages → wage level → excess demand → shortage → inflation
+
+    NEW parameters:
+    - remove_excess_demand: Hold excess demand at steady state (breaks the feedback)
+    - remove_gscpi: Remove GSCPI contribution to shortage equation
+    - remove_cu: Remove capacity utilization from wage equation
+
+    The simulation order is: Wages → Excess Demand → Shortage → Prices
     """
 
     # Load coefficients
@@ -117,7 +123,7 @@ def dynamic_simul_new_model(data, coef_path,
     if remove_shortage: shocks_removed.append("shortage")
     if remove_excess_demand: shocks_removed.append("excess_demand")
     if remove_gscpi: shocks_removed.append("gscpi")
-    if remove_gcu: shocks_removed.append("gcu")
+    if remove_cu: shocks_removed.append("cu")
     if remove_magpty: shocks_removed.append("magpty")
     if remove_dummy2020_q2: shocks_removed.append("dummy2020_q2")
     if remove_dummy2020_q3: shocks_removed.append("dummy2020_q3")
@@ -143,19 +149,55 @@ def dynamic_simul_new_model(data, coef_path,
     magpty = data['magpty'].values.copy()
 
     # New model variables
-    gcu = data['gcu'].values.copy() if 'gcu' in data.columns else np.zeros(timesteps)
+    cu = data['cu'].values.copy() if 'cu' in data.columns else np.zeros(timesteps)
     excess_demand = data['excess_demand'].values.copy() if 'excess_demand' in data.columns else np.zeros(timesteps)
     gscpi = data['gscpi'].values.copy() if 'gscpi' in data.columns else np.zeros(timesteps)
 
     # Handle NaN in new variables
-    gcu = np.nan_to_num(gcu, nan=0.0)
+    cu = np.nan_to_num(cu, nan=0.0)
     excess_demand = np.nan_to_num(excess_demand, nan=excess_demand[~np.isnan(excess_demand)].mean() if np.any(~np.isnan(excess_demand)) else 0.0)
     gscpi = np.nan_to_num(gscpi, nan=0.0)
+
+    # =========================================================================
+    # LEVEL TRACKING FOR ENDOGENOUS EXCESS DEMAND
+    # =========================================================================
+    # excess_demand = log(W) - log(NGDPPOT) - log(TCU/100) - trend
+    # We need to track wage and potential GDP levels to compute ED endogenously
+
+    # Get historical levels from data
+    log_w = data['log_w'].values.copy() if 'log_w' in data.columns else None
+    log_ngdppot = data['log_ngdppot'].values.copy() if 'log_ngdppot' in data.columns else None
+    tcu = data['tcu'].values.copy() if 'tcu' in data.columns else np.full(timesteps, 75.0)
+
+    # Steady-state parameters for excess demand calculation
+    log_tcu_star = np.log(0.75)  # Steady state TCU = 75%
+    g_ngdppot = 4.0  # Nominal potential GDP growth rate (annualized)
+
+    # If we don't have log_w, reconstruct from wage growth
+    if log_w is None:
+        print("  Warning: log_w not in data, reconstructing from wage growth")
+        log_w = np.zeros(timesteps)
+        log_w[0] = np.log(150)  # Approximate ECI index starting value
+        for i in range(1, timesteps):
+            log_w[i] = log_w[i-1] + gw[i] / 400
+
+    # If we don't have log_ngdppot, reconstruct from growth rate
+    if log_ngdppot is None:
+        print("  Warning: log_ngdppot not in data, reconstructing from growth rate")
+        log_ngdppot = np.zeros(timesteps)
+        log_ngdppot[0] = np.log(25000)  # Approximate NGDPPOT starting value
+        for i in range(1, timesteps):
+            log_ngdppot[i] = log_ngdppot[i-1] + g_ngdppot / 400
+
+    # Compute log_tcu from tcu
+    log_tcu = np.log(tcu / 100)
+
+    # Compute raw excess demand for historical data (for rolling trend)
+    raw_excess_demand_hist = log_w - log_ngdppot - log_tcu
 
     # Define dummy variables
     dummy_q2 = np.zeros(timesteps)
     dummy_q3 = np.zeros(timesteps)
-    # Find Q2 2020 and Q3 2020 indices
     for i, p in enumerate(period):
         p_dt = pd.Timestamp(p)
         if p_dt.year == 2020 and p_dt.quarter == 2:
@@ -168,23 +210,35 @@ def dynamic_simul_new_model(data, coef_path,
     gcpi_simul = np.zeros(timesteps)
     cf1_simul = np.zeros(timesteps)
     cf10_simul = np.zeros(timesteps)
-    shortage_simul = np.zeros(timesteps)  # NOW ENDOGENOUS
+    shortage_simul = np.zeros(timesteps)
     diffcpicf_simul = np.zeros(timesteps)
+    excess_demand_simul = np.zeros(timesteps)
 
+    # Level tracking arrays for counterfactual
+    log_w_simul = np.zeros(timesteps)
+    log_ngdppot_simul = np.zeros(timesteps)
+    raw_excess_demand_simul = np.zeros(timesteps)
+
+    # Initialize from historical data
     gw_simul[:4] = gw[:4]
     gcpi_simul[:4] = gcpi[:4]
     cf1_simul[:4] = cf1[:4]
     cf10_simul[:4] = cf10[:4]
     shortage_simul[:4] = shortage[:4]
     diffcpicf_simul[:4] = diffcpicf[:4]
+    excess_demand_simul[:4] = excess_demand[:4]
+
+    # Initialize levels from historical data
+    log_w_simul[:4] = log_w[:4]
+    log_ngdppot_simul[:4] = log_ngdppot[:4]
+    raw_excess_demand_simul[:4] = raw_excess_demand_hist[:4]
 
     # Initialize shock series for simulation
     grpe_simul = grpe.copy()
     grpf_simul = grpf.copy()
     vu_simul = vu.copy()
     magpty_simul = magpty.copy()
-    gcu_simul = gcu.copy()
-    excess_demand_simul = excess_demand.copy()
+    cu_simul = cu.copy()
     gscpi_simul = gscpi.copy()
     dummy_q2_simul = dummy_q2.copy()
     dummy_q3_simul = dummy_q3.copy()
@@ -192,8 +246,8 @@ def dynamic_simul_new_model(data, coef_path,
     # Get steady-state values for counterfactuals
     vu_steady = data['vu'].iloc[4] if len(data) > 4 else 1.2
     shortage_steady = 5.0
-    excess_demand_steady = excess_demand[4] if len(excess_demand) > 4 else 0.0
-    gcu_steady = 0.0  # No growth in steady state
+    excess_demand_steady = 0.0  # On trend
+    cu_steady = 0.0  # Detrended capacity utilization = 0 means on trend
 
     # Run counterfactual simulation
     for t in range(4, timesteps):
@@ -208,8 +262,8 @@ def dynamic_simul_new_model(data, coef_path,
         if remove_vu:
             vu_simul[t] = vu_steady
 
-        if remove_gcu:
-            gcu_simul[t] = gcu_steady
+        if remove_cu:
+            cu_simul[t] = cu_steady
 
         if remove_magpty:
             magpty_simul[t] = 2.0  # Long-run average
@@ -220,19 +274,68 @@ def dynamic_simul_new_model(data, coef_path,
         if remove_dummy2020_q3:
             dummy_q3_simul[t] = 0.0
 
-        if remove_excess_demand:
-            excess_demand_simul[t] = excess_demand_steady
-
         if remove_gscpi:
             gscpi_simul[t] = 0.0
 
         # =====================================================================
-        # SHORTAGE EQUATION (NEW - ENDOGENOUS)
-        # shortage = f(lagged_shortage, excess_demand, GSCPI)
-        # Coefficients: [const, L1-L4 shortage, excess_demand L1-L4, gscpi L1-L4]
+        # STEP 1: WAGE EQUATION (computed first since ED depends on wages)
+        # =====================================================================
+        gw_simul[t] = (
+            gw_beta[0] +  # constant
+            gw_beta[1] * gw_simul[t-1] +
+            gw_beta[2] * gw_simul[t-2] +
+            gw_beta[3] * gw_simul[t-3] +
+            gw_beta[4] * gw_simul[t-4] +
+            gw_beta[5] * cf1_simul[t-1] +
+            gw_beta[6] * cf1_simul[t-2] +
+            gw_beta[7] * cf1_simul[t-3] +
+            gw_beta[8] * cf1_simul[t-4] +
+            gw_beta[9] * magpty_simul[t-1] +
+            gw_beta[10] * vu_simul[t-1] +
+            gw_beta[11] * vu_simul[t-2] +
+            gw_beta[12] * vu_simul[t-3] +
+            gw_beta[13] * vu_simul[t-4] +
+            gw_beta[14] * diffcpicf_simul[t-1] +
+            gw_beta[15] * diffcpicf_simul[t-2] +
+            gw_beta[16] * diffcpicf_simul[t-3] +
+            gw_beta[17] * diffcpicf_simul[t-4] +
+            gw_beta[18] * cu_simul[t-1] +
+            gw_beta[19] * cu_simul[t-2] +
+            gw_beta[20] * cu_simul[t-3] +
+            gw_beta[21] * cu_simul[t-4] +
+            gw_beta[22] * dummy_q2_simul[t] +
+            gw_beta[23] * dummy_q3_simul[t]
+        )
+
+        # =====================================================================
+        # STEP 2: UPDATE LEVELS AND COMPUTE EXCESS DEMAND (endogenous)
+        # =====================================================================
+        # Update wage level from simulated wage growth
+        log_w_simul[t] = log_w_simul[t-1] + gw_simul[t] / 400
+
+        # Update potential GDP level (exogenous growth)
+        log_ngdppot_simul[t] = log_ngdppot_simul[t-1] + g_ngdppot / 400
+
+        # Compute raw excess demand from simulated levels
+        # Use historical TCU (exogenous) but simulated wage level
+        raw_excess_demand_simul[t] = log_w_simul[t] - log_ngdppot_simul[t] - log_tcu[t]
+
+        # Compute rolling trend (40-quarter rolling mean)
+        lookback = min(40, t + 1)
+        rolling_trend = np.mean(raw_excess_demand_simul[t-lookback+1:t+1])
+
+        # Detrend excess demand
+        if remove_excess_demand:
+            # If removing excess demand effect, hold at steady state
+            excess_demand_simul[t] = excess_demand_steady
+        else:
+            # Endogenous excess demand from simulated wage level
+            excess_demand_simul[t] = raw_excess_demand_simul[t] - rolling_trend
+
+        # =====================================================================
+        # STEP 3: SHORTAGE EQUATION (uses endogenous excess demand)
         # =====================================================================
         if remove_shortage:
-            # If removing shortage entirely, set to steady state
             shortage_simul[t] = shortage_steady
         else:
             shortage_simul[t] = (
@@ -254,39 +357,7 @@ def dynamic_simul_new_model(data, coef_path,
             )
 
         # =====================================================================
-        # WAGE EQUATION (MODIFIED - includes capacity utilization)
-        # Coefficients: [const, L1-L4 gw, L1-L4 cf1, L1 magpty, L1-L4 vu,
-        #                L1-L4 diffcpicf, L1-L4 gcu, dummy_q2, dummy_q3]
-        # =====================================================================
-        gw_simul[t] = (
-            gw_beta[0] +  # constant
-            gw_beta[1] * gw_simul[t-1] +
-            gw_beta[2] * gw_simul[t-2] +
-            gw_beta[3] * gw_simul[t-3] +
-            gw_beta[4] * gw_simul[t-4] +
-            gw_beta[5] * cf1_simul[t-1] +
-            gw_beta[6] * cf1_simul[t-2] +
-            gw_beta[7] * cf1_simul[t-3] +
-            gw_beta[8] * cf1_simul[t-4] +
-            gw_beta[9] * magpty_simul[t-1] +
-            gw_beta[10] * vu_simul[t-1] +
-            gw_beta[11] * vu_simul[t-2] +
-            gw_beta[12] * vu_simul[t-3] +
-            gw_beta[13] * vu_simul[t-4] +
-            gw_beta[14] * diffcpicf_simul[t-1] +
-            gw_beta[15] * diffcpicf_simul[t-2] +
-            gw_beta[16] * diffcpicf_simul[t-3] +
-            gw_beta[17] * diffcpicf_simul[t-4] +
-            gw_beta[18] * gcu_simul[t-1] +  # NEW: capacity utilization
-            gw_beta[19] * gcu_simul[t-2] +
-            gw_beta[20] * gcu_simul[t-3] +
-            gw_beta[21] * gcu_simul[t-4] +
-            gw_beta[22] * dummy_q2_simul[t] +
-            gw_beta[23] * dummy_q3_simul[t]
-        )
-
-        # =====================================================================
-        # PRICE EQUATION (same structure as BB)
+        # STEP 4: PRICE EQUATION (uses endogenous shortage)
         # =====================================================================
         gcpi_simul[t] = (
             gcpi_beta[0] +  # constant
@@ -310,7 +381,7 @@ def dynamic_simul_new_model(data, coef_path,
             gcpi_beta[18] * grpf_simul[t-2] +
             gcpi_beta[19] * grpf_simul[t-3] +
             gcpi_beta[20] * grpf_simul[t-4] +
-            gcpi_beta[21] * shortage_simul[t] +  # Now using endogenous shortage
+            gcpi_beta[21] * shortage_simul[t] +
             gcpi_beta[22] * shortage_simul[t-1] +
             gcpi_beta[23] * shortage_simul[t-2] +
             gcpi_beta[24] * shortage_simul[t-3] +
@@ -353,7 +424,7 @@ def dynamic_simul_new_model(data, coef_path,
         )
 
     # =========================================================================
-    # RUN BASELINE SIMULATION (all shocks included)
+    # RUN BASELINE SIMULATION (all shocks included, ED also endogenous)
     # =========================================================================
     gw_baseline = np.zeros(timesteps)
     gcpi_baseline = np.zeros(timesteps)
@@ -361,35 +432,28 @@ def dynamic_simul_new_model(data, coef_path,
     cf10_baseline = np.zeros(timesteps)
     shortage_baseline = np.zeros(timesteps)
     diffcpicf_baseline = np.zeros(timesteps)
+    excess_demand_baseline = np.zeros(timesteps)
 
+    # Level tracking for baseline
+    log_w_baseline = np.zeros(timesteps)
+    log_ngdppot_baseline = np.zeros(timesteps)
+    raw_excess_demand_baseline = np.zeros(timesteps)
+
+    # Initialize from historical data
     gw_baseline[:4] = gw[:4]
     gcpi_baseline[:4] = gcpi[:4]
     cf1_baseline[:4] = cf1[:4]
     cf10_baseline[:4] = cf10[:4]
     shortage_baseline[:4] = shortage[:4]
     diffcpicf_baseline[:4] = diffcpicf[:4]
+    excess_demand_baseline[:4] = excess_demand[:4]
+
+    log_w_baseline[:4] = log_w[:4]
+    log_ngdppot_baseline[:4] = log_ngdppot[:4]
+    raw_excess_demand_baseline[:4] = raw_excess_demand_hist[:4]
 
     for t in range(4, timesteps):
-        # Shortage equation (baseline)
-        shortage_baseline[t] = (
-            shortage_beta[0] +
-            shortage_beta[1] * shortage_baseline[t-1] +
-            shortage_beta[2] * shortage_baseline[t-2] +
-            shortage_beta[3] * shortage_baseline[t-3] +
-            shortage_beta[4] * shortage_baseline[t-4] +
-            shortage_beta[5] * excess_demand[t] +
-            shortage_beta[6] * excess_demand[t-1] +
-            shortage_beta[7] * excess_demand[t-2] +
-            shortage_beta[8] * excess_demand[t-3] +
-            shortage_beta[9] * excess_demand[t-4] +
-            shortage_beta[10] * gscpi[t] +
-            shortage_beta[11] * gscpi[t-1] +
-            shortage_beta[12] * gscpi[t-2] +
-            shortage_beta[13] * gscpi[t-3] +
-            shortage_beta[14] * gscpi[t-4]
-        )
-
-        # Wage equation (baseline)
+        # STEP 1: Wage equation (baseline)
         gw_baseline[t] = (
             gw_beta[0] +
             gw_beta[1] * gw_baseline[t-1] +
@@ -409,15 +473,43 @@ def dynamic_simul_new_model(data, coef_path,
             gw_beta[15] * diffcpicf_baseline[t-2] +
             gw_beta[16] * diffcpicf_baseline[t-3] +
             gw_beta[17] * diffcpicf_baseline[t-4] +
-            gw_beta[18] * gcu[t-1] +
-            gw_beta[19] * gcu[t-2] +
-            gw_beta[20] * gcu[t-3] +
-            gw_beta[21] * gcu[t-4] +
+            gw_beta[18] * cu[t-1] +
+            gw_beta[19] * cu[t-2] +
+            gw_beta[20] * cu[t-3] +
+            gw_beta[21] * cu[t-4] +
             gw_beta[22] * dummy_q2[t] +
             gw_beta[23] * dummy_q3[t]
         )
 
-        # Price equation (baseline)
+        # STEP 2: Update levels and compute excess demand (endogenous)
+        log_w_baseline[t] = log_w_baseline[t-1] + gw_baseline[t] / 400
+        log_ngdppot_baseline[t] = log_ngdppot_baseline[t-1] + g_ngdppot / 400
+        raw_excess_demand_baseline[t] = log_w_baseline[t] - log_ngdppot_baseline[t] - log_tcu[t]
+
+        lookback = min(40, t + 1)
+        rolling_trend_baseline = np.mean(raw_excess_demand_baseline[t-lookback+1:t+1])
+        excess_demand_baseline[t] = raw_excess_demand_baseline[t] - rolling_trend_baseline
+
+        # STEP 3: Shortage equation (baseline)
+        shortage_baseline[t] = (
+            shortage_beta[0] +
+            shortage_beta[1] * shortage_baseline[t-1] +
+            shortage_beta[2] * shortage_baseline[t-2] +
+            shortage_beta[3] * shortage_baseline[t-3] +
+            shortage_beta[4] * shortage_baseline[t-4] +
+            shortage_beta[5] * excess_demand_baseline[t] +
+            shortage_beta[6] * excess_demand_baseline[t-1] +
+            shortage_beta[7] * excess_demand_baseline[t-2] +
+            shortage_beta[8] * excess_demand_baseline[t-3] +
+            shortage_beta[9] * excess_demand_baseline[t-4] +
+            shortage_beta[10] * gscpi[t] +
+            shortage_beta[11] * gscpi[t-1] +
+            shortage_beta[12] * gscpi[t-2] +
+            shortage_beta[13] * gscpi[t-3] +
+            shortage_beta[14] * gscpi[t-4]
+        )
+
+        # STEP 4: Price equation (baseline)
         gcpi_baseline[t] = (
             gcpi_beta[0] +
             gcpi_beta[1] * magpty[t] +
@@ -500,8 +592,10 @@ def dynamic_simul_new_model(data, coef_path,
         'grpe': grpe,
         'grpf': grpf,
         'vu': vu,
-        'gcu': gcu,
+        'cu': cu,
         'excess_demand': excess_demand,
+        'excess_demand_simul': excess_demand_simul,  # NEW: simulated ED
+        'excess_demand_baseline': excess_demand_baseline,  # NEW: baseline ED
         'gscpi': gscpi,
         'magpty': magpty
     })
@@ -514,6 +608,8 @@ def dynamic_simul_new_model(data, coef_path,
         out_data[f'{shock_name}_contr_shortage'] = shortage_baseline - shortage_simul
         out_data[f'{shock_name}_contr_cf1'] = cf1_baseline - cf1_simul
         out_data[f'{shock_name}_contr_cf10'] = cf10_baseline - cf10_simul
+        # NEW: contribution to excess demand (for shocks that affect wages)
+        out_data[f'{shock_name}_contr_excess_demand'] = excess_demand_baseline - excess_demand_simul
 
     return out_data
 
@@ -562,13 +658,13 @@ print("\nRemove GSCPI (from shortage equation):")
 remove_gscpi = dynamic_simul_new_model(data, coef_path, remove_gscpi=True)
 
 print("\nRemove capacity utilization (from wage equation):")
-remove_gcu = dynamic_simul_new_model(data, coef_path, remove_gcu=True)
+remove_cu = dynamic_simul_new_model(data, coef_path, remove_cu=True)
 
 # Combined removal
 print("\nRemove all shocks:")
 remove_all = dynamic_simul_new_model(data, coef_path,
                                       remove_grpe=True, remove_grpf=True, remove_vu=True,
-                                      remove_shortage=True, remove_gcu=True, remove_magpty=True,
+                                      remove_shortage=True, remove_cu=True, remove_magpty=True,
                                       remove_dummy2020_q2=True, remove_dummy2020_q3=True)
 
 
@@ -588,7 +684,7 @@ remove_q2.to_excel(output_dir / 'remove_2020q2.xlsx', index=False)
 remove_q3.to_excel(output_dir / 'remove_2020q3.xlsx', index=False)
 remove_excess_demand.to_excel(output_dir / 'remove_excess_demand.xlsx', index=False)
 remove_gscpi.to_excel(output_dir / 'remove_gscpi.xlsx', index=False)
-remove_gcu.to_excel(output_dir / 'remove_gcu.xlsx', index=False)
+remove_cu.to_excel(output_dir / 'remove_cu.xlsx', index=False)
 remove_all.to_excel(output_dir / 'remove_all.xlsx', index=False)
 
 print(f"\nResults saved to: {output_dir}")
@@ -604,7 +700,7 @@ print("    - remove_2020q3.xlsx")
 print("  New model shocks:")
 print("    - remove_excess_demand.xlsx [NEW]")
 print("    - remove_gscpi.xlsx [NEW]")
-print("    - remove_gcu.xlsx [NEW]")
+print("    - remove_cu.xlsx [NEW]")
 print("    - remove_all.xlsx")
 
 
@@ -619,16 +715,16 @@ print("COMPUTING EXCESS DEMAND COMPONENT ATTRIBUTION")
 print("="*80)
 
 # Check if we have the component variables
-has_components = all(col in data.columns for col in ['log_wage', 'log_ngdppot', 'log_cu'])
+has_components = all(col in data.columns for col in ['log_w', 'log_ngdppot', 'cu'])
 
 if not has_components:
     # Try to compute from raw variables if available
     print("  Computing log components from raw data...")
-    if 'tcu' in data.columns:
-        data['log_cu'] = np.log(data['tcu'])
-    if 'ngdppot' in data.columns:
+    if 'tcu' in data.columns and 'log_tcu' not in data.columns:
+        data['log_tcu'] = np.log(data['tcu'] / 100)
+    if 'ngdppot' in data.columns and 'log_ngdppot' not in data.columns:
         data['log_ngdppot'] = np.log(data['ngdppot'])
-    # Note: log_wage might need to be computed from wage level data
+    # Note: log_w should already be computed in regression
 
 # Compute changes from reference period (Q4 2019 = pre-COVID steady state)
 ref_idx = data[data['period'] >= '2019-10-01'].index[0] if len(data[data['period'] >= '2019-10-01']) > 0 else 4
@@ -643,38 +739,45 @@ excess_demand_deviation = data['excess_demand'] - excess_demand_ref
 # excess_demand = log(w) - log(ngdppot) - log(cu)
 # Δexcess_demand = Δlog(w) - Δlog(ngdppot) - Δlog(cu)
 
-if 'log_cu' in data.columns and 'log_ngdppot' in data.columns:
-    log_cu_ref = data['log_cu'].iloc[ref_idx]
+# excess_demand = log(w) - log(ngdppot) - log(tcu/100) - trend
+# We have log_w, log_ngdppot, and can compute log_tcu from tcu
+if 'log_w' in data.columns and 'log_ngdppot' in data.columns and 'tcu' in data.columns:
+    # Compute log_tcu if not already present
+    if 'log_tcu' not in data.columns:
+        data['log_tcu'] = np.log(data['tcu'] / 100)
+
+    log_w_ref = data['log_w'].iloc[ref_idx]
     log_ngdppot_ref = data['log_ngdppot'].iloc[ref_idx]
+    log_tcu_ref = data['log_tcu'].iloc[ref_idx]
 
-    # Contribution of capacity utilization to excess_demand (negative sign because excess_demand = ... - log(cu))
-    cu_contr_to_ed = -(data['log_cu'] - log_cu_ref)
+    # Contribution of wages to excess_demand (positive sign: higher wages -> higher excess demand)
+    wage_contr_to_ed = data['log_w'] - log_w_ref
 
-    # Contribution of potential GDP to excess_demand (negative sign because excess_demand = ... - log(ngdppot))
+    # Contribution of potential GDP to excess_demand (negative sign: higher ngdppot -> lower excess demand)
     ngdppot_contr_to_ed = -(data['log_ngdppot'] - log_ngdppot_ref)
 
-    # Contribution of wages = residual (excess_demand change - cu contribution - ngdppot contribution)
-    wage_contr_to_ed = excess_demand_deviation - cu_contr_to_ed - ngdppot_contr_to_ed
+    # Contribution of capacity utilization to excess_demand (negative sign: higher cu -> lower excess demand)
+    cu_contr_to_ed = -(data['log_tcu'] - log_tcu_ref)
 
     print(f"  Reference period: {data['period'].iloc[ref_idx]}")
     print(f"  Computed component contributions to excess_demand")
 else:
-    # If we don't have components, create proportional attribution based on gcu and gw
-    print("  Using growth rates for proportional attribution...")
+    # If we don't have components, create proportional attribution based on cu and gw
+    print("  Using cumulative changes for proportional attribution...")
 
-    # Use gcu (capacity utilization growth) as proxy for cu contribution
-    # Negative because higher cu growth means lower excess_demand
-    gcu_cumsum = data['gcu'].cumsum() / 100  # Convert to log-like units
+    # Use cu (detrended capacity utilization) directly
+    # Higher cu means capacity is above trend, which reduces excess demand
+    cu_ref = data['cu'].iloc[ref_idx] if 'cu' in data.columns else 0
+    cu_contr_to_ed = -(data['cu'] - cu_ref) if 'cu' in data.columns else pd.Series(0, index=data.index)
 
-    # For wages, we can use gw (wage growth) relative to productivity
+    # For wages, use cumulative wage growth relative to productivity
     # Positive because higher wage growth means higher excess_demand
-    gw_cumsum = (data['gw'] - data['magpty']).cumsum() / 100  # Real wage growth
+    gw_cumsum = (data['gw'] - data['magpty']).cumsum() / 400  # Convert to log-like units
 
     # Normalize to match total excess_demand change
     total_change = excess_demand_deviation
 
     # Simple proportional attribution based on cumulative changes
-    cu_contr_to_ed = -gcu_cumsum  # Higher capacity = lower excess demand
     wage_contr_to_ed = gw_cumsum   # Higher wages = higher excess demand
     ngdppot_contr_to_ed = total_change - cu_contr_to_ed - wage_contr_to_ed  # Residual for potential GDP
 
@@ -718,9 +821,9 @@ baseline['wage_contr_gcpi_via_ed'] = wage_contr_gcpi_via_ed
 baseline['cu_contr_gcpi_via_ed'] = cu_contr_gcpi_via_ed
 baseline['ngdppot_contr_gcpi_via_ed'] = ngdppot_contr_gcpi_via_ed
 
-# Also add the gcu contribution through wages (direct effect)
-baseline['gcu_contr_gcpi'] = remove_gcu['gcu_contr_gcpi']
-baseline['gcu_contr_gw'] = remove_gcu['gcu_contr_gw']
+# Also add the cu contribution through wages (direct effect)
+baseline['cu_contr_gcpi'] = remove_cu['cu_contr_gcpi']
+baseline['cu_contr_gw'] = remove_cu['cu_contr_gw']
 
 # Save updated baseline with component attributions
 baseline.to_excel(output_dir / 'baseline.xlsx', index=False)
@@ -745,10 +848,10 @@ component_decomp = pd.DataFrame({
     'cu_contr_gcpi_via_ed': cu_contr_gcpi_via_ed,
     'ngdppot_contr_gcpi_via_ed': ngdppot_contr_gcpi_via_ed,
     # Direct capacity util effect on inflation (via wages)
-    'gcu_contr_gcpi_direct': remove_gcu['gcu_contr_gcpi'],
-    'gcu_contr_gw': remove_gcu['gcu_contr_gw'],
+    'cu_contr_gcpi_direct': remove_cu['cu_contr_gcpi'],
+    'cu_contr_gw': remove_cu['cu_contr_gw'],
     # Total capacity util effect on inflation (direct + via shortage)
-    'cu_total_contr_gcpi': remove_gcu['gcu_contr_gcpi'] + cu_contr_gcpi_via_ed
+    'cu_total_contr_gcpi': remove_cu['cu_contr_gcpi'] + cu_contr_gcpi_via_ed
 })
 
 component_decomp.to_excel(output_dir / 'excess_demand_components.xlsx', index=False)
@@ -770,7 +873,7 @@ print(f"  Food prices:           {remove_grpf.loc[summary_mask, 'grpf_contr_gcpi
 print(f"  V/U ratio:             {remove_vu.loc[summary_mask, 'vu_contr_gcpi'].max():.2f}")
 print(f"  Shortage (total):      {remove_shortage.loc[summary_mask, 'shortage_contr_gcpi'].max():.2f}")
 print(f"  Productivity:          {remove_magpty.loc[summary_mask, 'magpty_contr_gcpi'].max():.2f}")
-print(f"  Capacity utilization:  {remove_gcu.loc[summary_mask, 'gcu_contr_gcpi'].max():.2f} [NEW]")
+print(f"  Capacity utilization:  {remove_cu.loc[summary_mask, 'cu_contr_gcpi'].max():.2f} [NEW]")
 
 print(f"\nPeak contributions to SHORTAGE from 2020 onwards:")
 print("-"*60)
@@ -780,7 +883,7 @@ print(f"  GSCPI:                 {remove_gscpi.loc[summary_mask, 'gscpi_contr_sh
 print(f"\nPeak contributions to WAGES (gw) from 2020 onwards:")
 print("-"*60)
 print(f"  V/U ratio:             {remove_vu.loc[summary_mask, 'vu_contr_gw'].max():.2f}")
-print(f"  Capacity utilization:  {remove_gcu.loc[summary_mask, 'gcu_contr_gw'].max():.2f} [NEW]")
+print(f"  Capacity utilization:  {remove_cu.loc[summary_mask, 'cu_contr_gw'].max():.2f} [NEW]")
 
 print("\n" + "="*80)
 print("KEY INSIGHT: SHORTAGE DECOMPOSITION")

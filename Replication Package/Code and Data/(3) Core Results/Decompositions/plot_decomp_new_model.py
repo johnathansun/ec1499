@@ -54,7 +54,7 @@ remove_q3 = pd.read_excel(input_dir / 'remove_2020q3.xlsx')
 # NEW model-specific decompositions
 remove_excess_demand = pd.read_excel(input_dir / 'remove_excess_demand.xlsx')
 remove_gscpi = pd.read_excel(input_dir / 'remove_gscpi.xlsx')
-remove_gcu = pd.read_excel(input_dir / 'remove_gcu.xlsx')
+remove_cu = pd.read_excel(input_dir / 'remove_cu.xlsx')
 remove_all = pd.read_excel(input_dir / 'remove_all.xlsx')
 
 print(f"Loaded {len(baseline)} observations")
@@ -62,7 +62,7 @@ print(f"Loaded {len(baseline)} observations")
 # %%
 # Convert period to datetime if needed
 for df in [baseline, remove_grpe, remove_grpf, remove_vu, remove_short, remove_magpty,
-           remove_q2, remove_q3, remove_excess_demand, remove_gscpi, remove_gcu, remove_all]:
+           remove_q2, remove_q3, remove_excess_demand, remove_gscpi, remove_cu, remove_all]:
     if not pd.api.types.is_datetime64_any_dtype(df['period']):
         df['period'] = pd.to_datetime(df['period'])
 
@@ -79,7 +79,7 @@ datasets = {
     'remove_q3': remove_q3,
     'remove_excess_demand': remove_excess_demand,
     'remove_gscpi': remove_gscpi,
-    'remove_gcu': remove_gcu,
+    'remove_cu': remove_cu,
     'remove_all': remove_all
 }
 
@@ -97,7 +97,7 @@ remove_q2 = datasets['remove_q2']
 remove_q3 = datasets['remove_q3']
 remove_excess_demand = datasets['remove_excess_demand']
 remove_gscpi = datasets['remove_gscpi']
-remove_gcu = datasets['remove_gcu']
+remove_cu = datasets['remove_cu']
 remove_all = datasets['remove_all']
 
 print(f"Filtered to {len(baseline)} observations from {filter_date}")
@@ -261,7 +261,7 @@ decomp_gw = pd.DataFrame({
     'Food Prices': remove_grpf['grpf_contr_gw'],
     'Shortages': remove_short['shortage_contr_gw'],
     'V/U': remove_vu['vu_contr_gw'],
-    'Capacity Util': remove_gcu['gcu_contr_gw'],  # NEW
+    'Capacity Util': remove_cu['cu_contr_gw'],  # NEW
     'Productivity': remove_magpty['magpty_contr_gw'],
     'Q2 Dummy': remove_q2['dummy2020_q2_contr_gw'],
     'Q3 Dummy': remove_q3['dummy2020_q3_contr_gw']
@@ -403,7 +403,7 @@ decomp_gcpi_alt = pd.DataFrame({
     'Food Prices': remove_grpf['grpf_contr_gcpi'],
     'Excess Demand': remove_excess_demand['excess_demand_contr_gcpi'],  # NEW: replaces shortages
     'GSCPI': remove_gscpi['gscpi_contr_gcpi'],  # NEW: replaces shortages
-    'Capacity Util': remove_gcu['gcu_contr_gcpi'],  # NEW: capacity utilization effect
+    'Capacity Util': remove_cu['cu_contr_gcpi'],  # NEW: capacity utilization effect
     'V/U': remove_vu['vu_contr_gcpi'],
     'Productivity': remove_magpty['magpty_contr_gcpi'],
     'Q2 Dummy': remove_q2['dummy2020_q2_contr_gcpi'],
@@ -897,12 +897,12 @@ if has_component_data:
     print("\nCreating Figure 20: Capacity Utilization Total Effect on Inflation...")
 
     # Capacity utilization affects inflation through two channels:
-    # 1. Direct: gcu → wages → inflation  (remove_gcu['gcu_contr_gcpi'])
-    # 2. Indirect: gcu → excess_demand → shortage → inflation (cu_contr_gcpi_via_ed)
+    # 1. Direct: cu → wages → inflation  (remove_cu['cu_contr_gcpi'])
+    # 2. Indirect: cu → excess_demand → shortage → inflation (cu_contr_gcpi_via_ed)
 
     decomp_cu_inflation = pd.DataFrame({
         'period': component_decomp['period'],
-        'Direct (via wages)': component_decomp['gcu_contr_gcpi_direct'],
+        'Direct (via wages)': component_decomp['cu_contr_gcpi_direct'],
         'Indirect (via shortages)': component_decomp['cu_contr_gcpi_via_ed']
     })
 
@@ -1085,7 +1085,7 @@ if has_component_data:
 
     print(f"\nCapacity utilization TOTAL effect on inflation (2020+):")
     print("-"*60)
-    cu_direct = component_decomp.loc[covid_mask_comp, 'gcu_contr_gcpi_direct'].sum()
+    cu_direct = component_decomp.loc[covid_mask_comp, 'cu_contr_gcpi_direct'].sum()
     cu_indirect = component_decomp.loc[covid_mask_comp, 'cu_contr_gcpi_via_ed'].sum()
     cu_total = component_decomp.loc[covid_mask_comp, 'cu_total_contr_gcpi'].sum()
 
