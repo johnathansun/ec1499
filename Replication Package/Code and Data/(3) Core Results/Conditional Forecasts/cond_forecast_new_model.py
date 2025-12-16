@@ -76,7 +76,7 @@ def load_coefficients(coef_path):
     }
 
 
-def calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, vu_star, gcu_star):
+def calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, vu_star, cu_star):
     """
     Calculate the wage constant adjustment for steady state targeting.
     Modified for new model with capacity utilization.
@@ -86,8 +86,8 @@ def calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, 
     # Sum of vu coefficients (indices 10-13 in gw equation, after constant)
     sum_vu_coef = sum(gw_beta[10:14])
 
-    # Sum of gcu coefficients (indices 18-21 in gw equation, after constant)
-    sum_gcu_coef = sum(gw_beta[18:22])
+    # Sum of cu coefficients (indices 18-21 in gw equation, after constant)
+    sum_cu_coef = sum(gw_beta[18:22])
 
     # Sum of gw lag coefficients (indices 1-4)
     sum_gw_lag_coef = sum(gw_beta[1:5])
@@ -109,7 +109,7 @@ def calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, 
 
     wage_constant = (
         (-sum_vu_coef * vu_star) -
-        (sum_gcu_coef * gcu_star) -  # NEW: capacity utilization term
+        (sum_cu_coef * cu_star) -  # NEW: capacity utilization term
         (1 - sum_gw_lag_coef) * (
             (magpty_coef_gcpi / (1 - sum_gcpi_lag_coef) +
              magpty_coef_gw / (1 - sum_gw_lag_coef)) * magpty_star +
@@ -122,7 +122,7 @@ def calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, 
 
 
 def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, gscpi_star,
-                                    vu_decline_val, vu_quarters_decline, gcu_star=0,
+                                    vu_decline_val, vu_quarters_decline, cu_star=0,
                                     excess_demand_star=None, years=100):
     """
     Run conditional forecast with the new model (endogenous shortage).
@@ -143,8 +143,8 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
         Terminal value of v/u ratio
     vu_quarters_decline : int
         Number of quarters for v/u to reach terminal value
-    gcu_star : float
-        Long-run capacity utilization growth (steady state = 0)
+    cu_star : float
+        Long-run detrended capacity utilization (steady state = 0, i.e. on trend)
     excess_demand_star : float
         Long-run excess demand (if None, use last historical value)
     years : int
@@ -191,13 +191,25 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
     magpty = data['magpty'].values
 
     # New model variables
-    gcu = data['gcu'].values if 'gcu' in data.columns else np.zeros(len(data))
-    gscpi = data['gscpi'].values if 'gscpi' in data.columns else np.zeros(len(data))
-    excess_demand = data['excess_demand'].values if 'excess_demand' in data.columns else np.zeros(len(data))
+    cu = data['cu'].values
+    gscpi = data['gscpi'].values
+    excess_demand = data['excess_demand'].values
 
-    # Set default excess_demand_star if not provided
-    if excess_demand_star is None:
-        excess_demand_star = excess_demand[3] if len(excess_demand) > 3 else 0
+    # Initialize levels for endogenous excess demand calculation
+    # excess_demand = log(W) - log(NGDPPOT) - log(TCU/100) - trend
+    log_w_init = data['log_w'].values[-1] if 'log_w' in data.columns else np.log(150)  # ECI index ~150
+    log_ngdppot_init = data['log_ngdppot'].values[-1] if 'log_ngdppot' in data.columns else np.log(25000)
+    log_tcu_star = np.log(0.75)  # Steady state TCU = 75%
+    g_ngdppot = 4.0  # Nominal potential GDP growth rate (annualized)
+
+    # Get the trend value (last historical value of the rolling mean)
+    # In steady state, we assume trend is fixed
+    if 'excess_demand_trend' in data.columns:
+        excess_demand_trend = data['excess_demand_trend'].values[-1]
+    else:
+        # Approximate: raw excess demand at last period minus detrended value
+        raw_ed_last = log_w_init - log_ngdppot_init - np.log(data['tcu'].values[-1]/100) if 'tcu' in data.columns else 0
+        excess_demand_trend = raw_ed_last - excess_demand[-1] if len(excess_demand) > 0 else 0
 
     # Initialize simulation arrays (first 4 values from historical data)
     gw_simul = np.zeros(timesteps)
@@ -219,17 +231,36 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
     grpf_simul = np.zeros(timesteps)
     vu_simul = np.zeros(timesteps)
     magpty_simul = np.zeros(timesteps)
-    gcu_simul = np.zeros(timesteps)
+    cu_simul = np.zeros(timesteps)
     gscpi_simul = np.zeros(timesteps)
     excess_demand_simul = np.zeros(timesteps)
+
+    # Track levels for endogenous excess demand
+    log_w_simul = np.zeros(timesteps)
+    log_ngdppot_simul = np.zeros(timesteps)
+    raw_excess_demand_simul = np.zeros(timesteps)  # For computing rolling trend
 
     grpe_simul[:len(grpe)] = grpe
     grpf_simul[:len(grpf)] = grpf
     vu_simul[:len(vu)] = vu
     magpty_simul[:len(magpty)] = magpty
-    gcu_simul[:len(gcu)] = np.nan_to_num(gcu, nan=0.0)
+    cu_simul[:len(cu)] = np.nan_to_num(cu, nan=0.0)
     gscpi_simul[:len(gscpi)] = np.nan_to_num(gscpi, nan=0.0)
-    excess_demand_simul[:len(excess_demand)] = np.nan_to_num(excess_demand, nan=excess_demand_star)
+    excess_demand_simul[:len(excess_demand)] = np.nan_to_num(excess_demand, nan=0.0)
+
+    # Initialize level arrays from historical data
+    # Reconstruct log_w from cumulating wage growth backwards from last known value
+    log_w_simul[3] = log_w_init
+    for i in range(2, -1, -1):
+        log_w_simul[i] = log_w_simul[i+1] - gw[i+1] / 400
+
+    log_ngdppot_simul[3] = log_ngdppot_init
+    for i in range(2, -1, -1):
+        log_ngdppot_simul[i] = log_ngdppot_simul[i+1] - g_ngdppot / 400
+
+    # Initialize raw excess demand for first 4 periods
+    for i in range(4):
+        raw_excess_demand_simul[i] = log_w_simul[i] - log_ngdppot_simul[i] - log_tcu_star
 
     # Calculate slope for v/u transition
     vu_slope = (vu_decline_val - vu_simul[3]) / vu_quarters_decline
@@ -241,9 +272,8 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
         grpe_simul[t] = 0
         grpf_simul[t] = 0
         magpty_simul[t] = magpty_star
-        gcu_simul[t] = gcu_star
+        cu_simul[t] = cu_star
         gscpi_simul[t] = gscpi_star
-        excess_demand_simul[t] = excess_demand_star
 
         # V/U path: gradual transition to terminal value
         if vu_slope >= 0:
@@ -251,8 +281,53 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
         else:
             vu_simul[t] = max(vu_decline_val, vu_simul[t-1] + vu_slope)
 
-        # SHORTAGE EQUATION (NEW - endogenous)
-        # shortage = f(lagged shortage, excess demand, gscpi)
+        # STEP 1: WAGE EQUATION (compute first since excess demand depends on wages)
+        # Indices: const=0, L1-L4 gw=1-4, L1-L4 cf1=5-8, magpty=9,
+        #          L1-L4 vu=10-13, L1-L4 diffcpicf=14-17, L1-L4 cu=18-21, dummies=22-23
+        gw_simul[t] = (
+            gw_beta[1] * gw_simul[t-1] +
+            gw_beta[2] * gw_simul[t-2] +
+            gw_beta[3] * gw_simul[t-3] +
+            gw_beta[4] * gw_simul[t-4] +
+            gw_beta[5] * cf1_simul[t-1] +
+            gw_beta[6] * cf1_simul[t-2] +
+            gw_beta[7] * cf1_simul[t-3] +
+            gw_beta[8] * cf1_simul[t-4] +
+            gw_beta[9] * magpty_simul[t-1] +
+            gw_beta[10] * vu_simul[t-1] +
+            gw_beta[11] * vu_simul[t-2] +
+            gw_beta[12] * vu_simul[t-3] +
+            gw_beta[13] * vu_simul[t-4] +
+            gw_beta[14] * diffcpicf_simul[t-1] +
+            gw_beta[15] * diffcpicf_simul[t-2] +
+            gw_beta[16] * diffcpicf_simul[t-3] +
+            gw_beta[17] * diffcpicf_simul[t-4] +
+            gw_beta[18] * cu_simul[t-1] +
+            gw_beta[19] * cu_simul[t-2] +
+            gw_beta[20] * cu_simul[t-3] +
+            gw_beta[21] * cu_simul[t-4] +
+            wage_constant
+        )
+
+        # STEP 2: UPDATE LEVELS AND COMPUTE EXCESS DEMAND (endogenous)
+        # Update wage level: log(W_t) = log(W_{t-1}) + gw_t / 400
+        log_w_simul[t] = log_w_simul[t-1] + gw_simul[t] / 400
+
+        # Update potential GDP level (exogenous growth)
+        log_ngdppot_simul[t] = log_ngdppot_simul[t-1] + g_ngdppot / 400
+
+        # Compute raw excess demand from levels
+        raw_excess_demand_simul[t] = log_w_simul[t] - log_ngdppot_simul[t] - log_tcu_star
+
+        # Compute trend as 40-quarter rolling mean (same as regression)
+        # Use available history, minimum 4 quarters
+        lookback = min(40, t + 1)
+        rolling_trend = np.mean(raw_excess_demand_simul[t-lookback+1:t+1])
+
+        # Detrend excess demand
+        excess_demand_simul[t] = raw_excess_demand_simul[t] - rolling_trend
+
+        # STEP 3: SHORTAGE EQUATION (uses endogenous excess demand)
         # Indices: const=0, L1-L4 shortage=1-4, excess_demand=5-9, gscpi=10-14
         shortage_simul[t] = (
             shortage_beta[0] +  # constant
@@ -272,35 +347,7 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
             shortage_beta[14] * gscpi_simul[t-4]
         )
 
-        # WAGE EQUATION (modified with capacity utilization)
-        # Indices: const=0, L1-L4 gw=1-4, L1-L4 cf1=5-8, magpty=9,
-        #          L1-L4 vu=10-13, L1-L4 diffcpicf=14-17, L1-L4 gcu=18-21, dummies=22-23
-        gw_simul[t] = (
-            gw_beta[1] * gw_simul[t-1] +
-            gw_beta[2] * gw_simul[t-2] +
-            gw_beta[3] * gw_simul[t-3] +
-            gw_beta[4] * gw_simul[t-4] +
-            gw_beta[5] * cf1_simul[t-1] +
-            gw_beta[6] * cf1_simul[t-2] +
-            gw_beta[7] * cf1_simul[t-3] +
-            gw_beta[8] * cf1_simul[t-4] +
-            gw_beta[9] * magpty_simul[t-1] +
-            gw_beta[10] * vu_simul[t-1] +
-            gw_beta[11] * vu_simul[t-2] +
-            gw_beta[12] * vu_simul[t-3] +
-            gw_beta[13] * vu_simul[t-4] +
-            gw_beta[14] * diffcpicf_simul[t-1] +
-            gw_beta[15] * diffcpicf_simul[t-2] +
-            gw_beta[16] * diffcpicf_simul[t-3] +
-            gw_beta[17] * diffcpicf_simul[t-4] +
-            gw_beta[18] * gcu_simul[t-1] +  # NEW: capacity utilization
-            gw_beta[19] * gcu_simul[t-2] +
-            gw_beta[20] * gcu_simul[t-3] +
-            gw_beta[21] * gcu_simul[t-4] +
-            wage_constant
-        )
-
-        # PRICE EQUATION (same structure as BB, but uses endogenous shortage)
+        # STEP 4: PRICE EQUATION (uses endogenous shortage from step 3)
         gcpi_simul[t] = (
             gcpi_beta[1] * magpty_simul[t] +
             gcpi_beta[2] * gcpi_simul[t-1] +
@@ -386,7 +433,7 @@ def conditional_forecast_new_model(data, coef_path, wage_constant, magpty_star, 
         'grpf_simul': grpf_simul,
         'vu_simul': vu_simul,
         'shortage_simul': shortage_simul,  # Now endogenous!
-        'gcu_simul': gcu_simul,
+        'cu_simul': cu_simul,
         'gscpi_simul': gscpi_simul,
         'excess_demand_simul': excess_demand_simul
     })
@@ -408,7 +455,7 @@ shortage_beta = coeffs['shortage']
 # Steady state parameters
 magpty_star = 1.0      # Long-run productivity growth
 gscpi_star = 0.0       # Long-run GSCPI (no supply chain pressure)
-gcu_star = 0.0         # Long-run capacity utilization growth (stable)
+cu_star = 0.0          # Long-run detrended capacity utilization (on trend)
 vu_star = 1.2          # Long-run target v/u
 
 # Calculate long-run shortage implied by excess demand and gscpi at steady state
@@ -417,8 +464,8 @@ sum_shortage_lag = sum(shortage_beta[1:5])
 sum_excess_demand = sum(shortage_beta[5:10])
 sum_gscpi = sum(shortage_beta[10:15])
 
-# Use historical average excess demand for steady state
-excess_demand_star = data_orig['excess_demand'].dropna().iloc[-4:].mean()
+# Steady state excess demand = 0 (on trend)
+excess_demand_star = 0.0
 
 if abs(1 - sum_shortage_lag) > 0.01:
     shortage_star = (shortage_beta[0] + sum_excess_demand * excess_demand_star + sum_gscpi * gscpi_star) / (1 - sum_shortage_lag)
@@ -428,12 +475,12 @@ else:
 print(f"Steady state parameters:")
 print(f"  magpty*:        {magpty_star:.2f}")
 print(f"  vu*:            {vu_star:.2f}")
-print(f"  gcu*:           {gcu_star:.2f}")
+print(f"  cu*:            {cu_star:.2f}")
 print(f"  gscpi*:         {gscpi_star:.2f}")
 print(f"  excess_demand*: {excess_demand_star:.4f}")
 print(f"  shortage* (implied): {shortage_star:.2f}")
 
-wage_constant = calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, vu_star, gcu_star)
+wage_constant = calculate_wage_constant_new(gw_beta, gcpi_beta, magpty_star, shortage_star, vu_star, cu_star)
 print(f"\nWage constant adjustment: {wage_constant:.6f}")
 
 
@@ -448,7 +495,7 @@ result_low = conditional_forecast_new_model(
     data, coef_path, wage_constant, magpty_star, gscpi_star,
     vu_decline_val=0.8,
     vu_quarters_decline=8,
-    gcu_star=gcu_star,
+    cu_star=cu_star,
     excess_demand_star=excess_demand_star,
     years=100
 )
@@ -459,7 +506,7 @@ result_mid = conditional_forecast_new_model(
     data, coef_path, wage_constant, magpty_star, gscpi_star,
     vu_decline_val=1.2,
     vu_quarters_decline=8,
-    gcu_star=gcu_star,
+    cu_star=cu_star,
     excess_demand_star=excess_demand_star,
     years=100
 )
@@ -470,7 +517,7 @@ result_high = conditional_forecast_new_model(
     data, coef_path, wage_constant, magpty_star, gscpi_star,
     vu_decline_val=1.8,
     vu_quarters_decline=8,
-    gcu_star=gcu_star,
+    cu_star=cu_star,
     excess_demand_star=excess_demand_star,
     years=100
 )

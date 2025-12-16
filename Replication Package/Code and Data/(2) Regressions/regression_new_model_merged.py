@@ -13,7 +13,7 @@ This script estimates the modified model with:
 
 Configuration:
 - Set USE_PRE_COVID_SAMPLE = True for pre-COVID estimation (out-of-sample predictions)
-- Set USE_PRE_COVID_SAMPLE = False for full sample estimation
+- Set USE_PRE_COVID_SAMPLE = True for full sample estimation
 """
 
 import pandas as pd
@@ -167,7 +167,7 @@ df['excess_demand'] = df['log_w'] - df['log_ngdppot'] - df['log_tcu']
 df['excess_demand_trend'] = df['excess_demand'].rolling(window=40).mean()
 
 df['excess_demand'] = df['excess_demand'] - df['excess_demand_trend']
-df['excess_demand'] = (df['excess_demand'] - df['excess_demand'].mean()) / df['excess_demand'].std()
+# df['excess_demand'] = (df['excess_demand'] - df['excess_demand'].mean()) / df['excess_demand'].std()
 
 print(f"\nExcess demand proxy statistics:")
 print(f"  Mean: {df['excess_demand'].mean():.4f}")
@@ -719,7 +719,7 @@ if not USE_PRE_COVID_SAMPLE:
 
 export_vars += [
     # New variables
-    'tcu', 'cu', 'ngdppot', 'gscpi', 'log_ngdppot', 'excess_demand',
+    'tcu', 'cu', 'ngdppot', 'gscpi', 'log_ngdppot', 'log_w', 'excess_demand', 'excess_demand_trend',
     # Fitted values
     'gwf1', 'shortagef', 'gcpif', 'cf1f', 'cf10f',
     # Residuals
