@@ -175,11 +175,12 @@ def irfs_new_model(data, table_q4_data, shocks, rho, coef_path):
     shock_val_vu = np.nanstd(table_q4_data['vu']) if 'vu' in table_q4_data.columns else 0.3
     shock_val_shortage = np.nanstd(table_q4_data['shortage']) if 'shortage' in table_q4_data.columns else 10.0
     shock_val_gscpi = np.nanstd(table_q4_data['gscpi']) if 'gscpi' in table_q4_data.columns else 1.0
-    shock_val_gcu = np.nanstd(table_q4_data['gcu']) if 'gcu' in table_q4_data.columns else 5.0
+    # Note: 'cu' is the detrended capacity utilization series used in the model
+    shock_val_cu = np.nanstd(table_q4_data['cu']) if 'cu' in table_q4_data.columns else 0.04
 
     print(f"    Shock magnitudes (1 std dev):")
     print(f"      grpe: {shock_val_grpe:.2f}, grpf: {shock_val_grpf:.2f}, vu: {shock_val_vu:.3f}")
-    print(f"      shortage: {shock_val_shortage:.2f}, gscpi: {shock_val_gscpi:.2f}, gcu: {shock_val_gcu:.2f}")
+    print(f"      shortage: {shock_val_shortage:.2f}, gscpi: {shock_val_gscpi:.2f}, cu: {shock_val_cu:.4f}")
 
     # Run IRF simulation
     for t in range(4, timesteps):
@@ -189,14 +190,14 @@ def irfs_new_model(data, table_q4_data, shocks, rho, coef_path):
         shock_grpf = shock_val_grpf if (add_grpf_shock and t == 4) else 0
         shock_vu = shock_val_vu if (add_vu_shock and t == 4) else 0
         shock_gscpi = shock_val_gscpi if (add_gscpi_shock and t == 4) else 0
-        shock_gcu = shock_val_gcu if (add_gcu_shock and t == 4) else 0
+        shock_cu = shock_val_cu if (add_gcu_shock and t == 4) else 0
 
         # Update exogenous shock series with persistence
         grpe_shock_series[t] = rho_grpe * grpe_shock_series[t-1] + shock_grpe
         grpf_shock_series[t] = rho_grpf * grpf_shock_series[t-1] + shock_grpf
         vu_shock_series[t] = rho_vu * vu_shock_series[t-1] + shock_vu
         gscpi_shock_series[t] = rho_gscpi * gscpi_shock_series[t-1] + shock_gscpi
-        gcu_shock_series[t] = rho_gcu * gcu_shock_series[t-1] + shock_gcu
+        gcu_shock_series[t] = rho_gcu * gcu_shock_series[t-1] + shock_cu
 
         # =====================================================================
         # STEP 1: WAGE EQUATION (computed FIRST since ED depends on wages)
