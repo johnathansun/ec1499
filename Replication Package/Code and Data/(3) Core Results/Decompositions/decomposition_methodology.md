@@ -167,7 +167,7 @@ The first 4 periods use historical data as initial conditions. The dynamic simul
 
 | Shock | Counterfactual Setting | Steady State Value |
 |-------|------------------------|-------------------|
-| Excess demand ($ed$) | Set to initial value | $ed^* = ed_{t=4}$ |
+| Excess demand ($ed$) | Set to 0 | $ed^* = 0$ (on trend) |
 | GSCPI ($gscpi$) | Set to 0 | 0 (no supply chain pressure) |
 | Capacity utilization ($cu$) | Set to 0 | 0 (on trend) |
 
@@ -315,6 +315,34 @@ This answers the question: *How much of shortage-driven inflation was caused by 
 | `remove_cu.xlsx` | Counterfactual: capacity utilization on trend [NEW] |
 | `remove_all.xlsx` | Counterfactual: all shocks removed |
 | `excess_demand_components.xlsx` | Component-level attribution [NEW] |
+
+---
+
+## Comparison: Decomposition vs. Conditional Forecast
+
+Both the decomposition and conditional forecast use the same model structure but differ in purpose and implementation:
+
+| Aspect | Decomposition | Conditional Forecast |
+|--------|--------------|---------------------|
+| **Purpose** | Historical attribution: "What caused past inflation?" | Forward projection: "Where is inflation headed?" |
+| **Time horizon** | Historical (Q4 2018 → end of sample) | Future (100+ years forward) |
+| **Exogenous variables** | Historical values (actual data) | Steady-state values |
+| **Wage constant** | Original estimated ($\alpha_0$) | Adjusted ($\alpha_0^{adj}$) for convergence |
+| **Excess demand** | Endogenous (computed from simulated wages) | Endogenous (computed from simulated wages) |
+| **V/U treatment** | Varies by counterfactual | Scenario-based (low/mid/high paths) |
+
+### Key Similarity
+
+Both simulations now compute excess demand **endogenously** from simulated wage levels, ensuring the full feedback loop is captured:
+
+$$
+gw \to W \to ed \to shortage \to gcpi
+$$
+
+### Key Difference: Wage Constant
+
+- **Decomposition**: Uses the original estimated constant to match historical dynamics
+- **Conditional Forecast**: Adjusts the constant to ensure the model converges to a target steady state (2% inflation)
 
 ---
 

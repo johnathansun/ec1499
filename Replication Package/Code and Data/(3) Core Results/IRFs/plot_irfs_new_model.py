@@ -7,13 +7,22 @@ Liang & Sun (2025)
 
 This file generates IRF plots for the modified model.
 
+Key feature: Excess demand is ENDOGENOUS
+- Wages are computed first
+- Wage level accumulates: log(W_t) = log(W_{t-1}) + gw_t/400
+- Excess demand = log(W) - log(NGDPPOT) - log(TCU) - trend
+- Shortages depend on endogenous excess demand
+
 Generates:
-- Figure 10 (New): Responses to energy, food, and shortage shocks
-- Figure 11 (New): Response to V/U shock
-- Figure 12 (New): Responses to excess demand and GSCPI shocks (via shortages)
-- Figure 13 (New): Response to capacity utilization shock (via wages)
-- Figure 14 (New): Comparison of persistent vs one-time shocks
-- Figure 15 (New): Combined panel of all new model shocks
+- Figure 10: Responses to energy, food, and shortage shocks
+- Figure 11: Response to V/U shock
+- Figure 12: Response to GSCPI shock (via endogenous shortage)
+- Figure 13: Response to capacity utilization shock (via wages → ED → shortage)
+- Figure 14: Persistent vs one-time shocks comparison
+- Figure 15: All shocks combined
+- Figure 16: Endogenous feedback loop (V/U shock)
+- Figure 17: Endogenous feedback loop (Capacity utilization shock)
+- Figure 18: Wage response to labor market shocks
 """
 
 import pandas as pd
@@ -47,12 +56,10 @@ irf_shortage = pd.read_excel(input_dir / 'results_shortage.xlsx')
 irf_vu = pd.read_excel(input_dir / 'results_vu.xlsx')
 
 # Load IRF data - new model shocks
-irf_excess_demand = pd.read_excel(input_dir / 'results_excess_demand.xlsx')
 irf_gscpi = pd.read_excel(input_dir / 'results_gscpi.xlsx')
 irf_gcu = pd.read_excel(input_dir / 'results_gcu.xlsx')
 
 # Load IRF data - persistent shocks
-irf_excess_demand_persistent = pd.read_excel(input_dir / 'results_excess_demand_persistent.xlsx')
 irf_gscpi_persistent = pd.read_excel(input_dir / 'results_gscpi_persistent.xlsx')
 irf_gcu_persistent = pd.read_excel(input_dir / 'results_gcu_persistent.xlsx')
 
@@ -67,10 +74,8 @@ irf_energy_f = filter_irf(irf_energy)
 irf_food_f = filter_irf(irf_food)
 irf_shortage_f = filter_irf(irf_shortage)
 irf_vu_f = filter_irf(irf_vu)
-irf_excess_demand_f = filter_irf(irf_excess_demand)
 irf_gscpi_f = filter_irf(irf_gscpi)
 irf_gcu_f = filter_irf(irf_gcu)
-irf_excess_demand_persistent_f = filter_irf(irf_excess_demand_persistent)
 irf_gscpi_persistent_f = filter_irf(irf_gscpi_persistent)
 irf_gcu_persistent_f = filter_irf(irf_gcu_persistent)
 
@@ -88,6 +93,7 @@ colors = {
     'Excess Demand': '#882255', # Dark magenta/wine
     'GSCPI': '#009E73',         # Teal
     'Capacity Util': '#CC79A7', # Pink
+    'Wage Level': '#E69F00',    # Orange
     'Persistent': '#000000',    # Black (for persistent versions)
     'One-time': '#888888'       # Grey (for one-time versions)
 }
@@ -139,7 +145,6 @@ ax.set_ylabel('Percent', fontsize=16)
 ax.set_xlim(0.5, 16.5)
 ax.set_xticks(range(1, 17))
 ax.set_ylim(-0.5, 4)
-# ax.set_yticks(np.arange(-0.5, 3.0, 0.5))
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
@@ -175,7 +180,6 @@ ax.set_ylabel('Percent', fontsize=16)
 ax.set_xlim(0.5, 16.5)
 ax.set_xticks(range(1, 17))
 ax.set_ylim(0.0, 4.0)
-# ax.set_yticks(np.arange(0.0, 2.2, 0.2))
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
@@ -191,38 +195,56 @@ plt.show()
 
 # %%
 # =============================================================================
-# FIGURE 12 (NEW): EXCESS DEMAND AND GSCPI SHOCKS
+# FIGURE 12 (NEW): GSCPI SHOCK (SUPPLY CHAIN PRESSURE)
 # =============================================================================
-print("\nCreating Figure 12: Excess Demand and GSCPI Shocks...")
+print("\nCreating Figure 12: GSCPI Shock...")
 
-fig, ax = plt.subplots(figsize=(12, 7))
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-ax.plot(quarters, irf_excess_demand_f['gcpi_simul'].values, color=colors['Excess Demand'],
-        linewidth=2, label='Excess Demand')
-ax.plot(quarters, irf_gscpi_f['gcpi_simul'].values, color=colors['GSCPI'],
-        linewidth=2, label='GSCPI (Supply Chain)')
+# Panel A: Inflation response
+ax1 = axes[0]
+ax1.plot(quarters, irf_gscpi_f['gcpi_simul'].values, color=colors['GSCPI'],
+        linewidth=2, label='One-time')
+ax1.plot(quarters, irf_gscpi_persistent_f['gcpi_simul'].values, color=colors['GSCPI'],
+        linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
 
-ax.set_title('Inflation response to shortage component shocks\n(via endogenous shortage equation)',
-             fontsize=16, fontweight='normal')
-ax.set_xlabel('Quarter', fontsize=16)
-ax.set_ylabel('Percent', fontsize=16)
+ax1.set_title('(A) Inflation Response', fontsize=14, fontweight='bold')
+ax1.set_xlabel('Quarter', fontsize=12)
+ax1.set_ylabel('Percent', fontsize=12)
+ax1.set_xlim(0.5, 16.5)
+ax1.set_xticks(range(1, 17, 2))
+ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax1.xaxis.grid(False)
+ax1.spines['top'].set_visible(False)
+ax1.spines['right'].set_visible(False)
+ax1.axhline(y=0, color='black', linewidth=0.5)
+ax1.legend(loc='best', fontsize=10)
 
-ax.set_xlim(0.5, 16.5)
-ax.set_xticks(range(1, 17))
+# Panel B: Shortage response
+ax2 = axes[1]
+ax2.plot(quarters, irf_gscpi_f['shortage_simul'].values, color=colors['GSCPI'],
+        linewidth=2, label='One-time')
+ax2.plot(quarters, irf_gscpi_persistent_f['shortage_simul'].values, color=colors['GSCPI'],
+        linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
 
-ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
-ax.xaxis.grid(False)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.axhline(y=0, color='black', linewidth=0.5)
+ax2.set_title('(B) Shortage Response', fontsize=14, fontweight='bold')
+ax2.set_xlabel('Quarter', fontsize=12)
+ax2.set_ylabel('Shortage Index', fontsize=12)
+ax2.set_xlim(0.5, 16.5)
+ax2.set_xticks(range(1, 17, 2))
+ax2.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax2.xaxis.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.axhline(y=0, color='black', linewidth=0.5)
+ax2.legend(loc='best', fontsize=10)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=2,
-          frameon=True, edgecolor='black', fancybox=False)
-
+plt.suptitle('Response to GSCPI (Supply Chain Pressure) Shock',
+             fontsize=16, fontweight='bold', y=1.02)
 plt.tight_layout()
-plt.savefig(output_dir / 'figure_12_irf_shortage_components.png', dpi=300, bbox_inches='tight')
-plt.savefig(output_dir / 'figure_12_irf_shortage_components.pdf', bbox_inches='tight')
-print(f"  Saved to {output_dir / 'figure_12_irf_shortage_components.png'}")
+plt.savefig(output_dir / 'figure_12_irf_gscpi_shock.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_12_irf_gscpi_shock.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_12_irf_gscpi_shock.png'}")
 plt.show()
 
 
@@ -239,7 +261,7 @@ ax.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'],
 ax.plot(quarters, irf_gcu_persistent_f['gcpi_simul'].values, color=colors['Capacity Util'],
         linewidth=2, linestyle='--', label='Persistent shock (ρ=0.9)')
 
-ax.set_title('Inflation response to capacity utilization shock\n(via wage equation)',
+ax.set_title('Inflation response to capacity utilization shock\n(via wage equation → excess demand → shortage)',
              fontsize=16, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -269,15 +291,15 @@ plt.show()
 # =============================================================================
 print("\nCreating Figure 14: Persistent vs One-Time Shocks...")
 
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Panel A: Excess Demand
+# Panel A: GSCPI
 ax1 = axes[0]
-ax1.plot(quarters, irf_excess_demand_f['gcpi_simul'].values,
-         color=colors['Excess Demand'], linewidth=2, label='One-time')
-ax1.plot(quarters, irf_excess_demand_persistent_f['gcpi_simul'].values,
-         color=colors['Excess Demand'], linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
-ax1.set_title('(A) Excess Demand Shock', fontsize=14, fontweight='bold')
+ax1.plot(quarters, irf_gscpi_f['gcpi_simul'].values,
+         color=colors['GSCPI'], linewidth=2, label='One-time')
+ax1.plot(quarters, irf_gscpi_persistent_f['gcpi_simul'].values,
+         color=colors['GSCPI'], linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
+ax1.set_title('(A) GSCPI Shock', fontsize=14, fontweight='bold')
 ax1.set_xlabel('Quarter', fontsize=12)
 ax1.set_ylabel('Inflation (percent)', fontsize=12)
 ax1.set_xlim(0.5, 16.5)
@@ -289,13 +311,13 @@ ax1.spines['right'].set_visible(False)
 ax1.axhline(y=0, color='black', linewidth=0.5)
 ax1.legend(loc='best', fontsize=10)
 
-# Panel B: GSCPI
+# Panel B: Capacity Utilization
 ax2 = axes[1]
-ax2.plot(quarters, irf_gscpi_f['gcpi_simul'].values,
-         color=colors['GSCPI'], linewidth=2, label='One-time')
-ax2.plot(quarters, irf_gscpi_persistent_f['gcpi_simul'].values,
-         color=colors['GSCPI'], linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
-ax2.set_title('(B) GSCPI Shock', fontsize=14, fontweight='bold')
+ax2.plot(quarters, irf_gcu_f['gcpi_simul'].values,
+         color=colors['Capacity Util'], linewidth=2, label='One-time')
+ax2.plot(quarters, irf_gcu_persistent_f['gcpi_simul'].values,
+         color=colors['Capacity Util'], linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
+ax2.set_title('(B) Capacity Utilization Shock', fontsize=14, fontweight='bold')
 ax2.set_xlabel('Quarter', fontsize=12)
 ax2.set_ylabel('Inflation (percent)', fontsize=12)
 ax2.set_xlim(0.5, 16.5)
@@ -306,24 +328,6 @@ ax2.spines['top'].set_visible(False)
 ax2.spines['right'].set_visible(False)
 ax2.axhline(y=0, color='black', linewidth=0.5)
 ax2.legend(loc='best', fontsize=10)
-
-# Panel C: Capacity Utilization
-ax3 = axes[2]
-ax3.plot(quarters, irf_gcu_f['gcpi_simul'].values,
-         color=colors['Capacity Util'], linewidth=2, label='One-time')
-ax3.plot(quarters, irf_gcu_persistent_f['gcpi_simul'].values,
-         color=colors['Capacity Util'], linewidth=2, linestyle='--', label='Persistent (ρ=0.9)')
-ax3.set_title('(C) Capacity Utilization Shock', fontsize=14, fontweight='bold')
-ax3.set_xlabel('Quarter', fontsize=12)
-ax3.set_ylabel('Inflation (percent)', fontsize=12)
-ax3.set_xlim(0.5, 16.5)
-ax3.set_xticks(range(1, 17, 2))
-ax3.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
-ax3.xaxis.grid(False)
-ax3.spines['top'].set_visible(False)
-ax3.spines['right'].set_visible(False)
-ax3.axhline(y=0, color='black', linewidth=0.5)
-ax3.legend(loc='best', fontsize=10)
 
 plt.suptitle('Inflation Response: One-Time vs Persistent Shocks (New Model)',
              fontsize=16, fontweight='bold', y=1.02)
@@ -336,9 +340,9 @@ plt.show()
 
 # %%
 # =============================================================================
-# FIGURE 15 (NEW): ALL NEW MODEL SHOCKS COMBINED
+# FIGURE 15 (NEW): ALL SHOCKS COMBINED
 # =============================================================================
-print("\nCreating Figure 15: All New Model Shocks Combined...")
+print("\nCreating Figure 15: All Shocks Combined...")
 
 fig, ax = plt.subplots(figsize=(14, 8))
 
@@ -353,8 +357,6 @@ ax.plot(quarters, irf_vu_f['gcpi_simul'].values, color=colors['V/U'],
         linewidth=2, label='V/U (persistent)')
 
 # New model shocks
-ax.plot(quarters, irf_excess_demand_f['gcpi_simul'].values, color=colors['Excess Demand'],
-        linewidth=2, linestyle='--', label='Excess Demand')
 ax.plot(quarters, irf_gscpi_f['gcpi_simul'].values, color=colors['GSCPI'],
         linewidth=2, linestyle='--', label='GSCPI')
 ax.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'],
@@ -374,7 +376,7 @@ ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 ax.axhline(y=0, color='black', linewidth=0.5)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=4,
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=3,
           frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -386,46 +388,187 @@ plt.show()
 
 # %%
 # =============================================================================
-# FIGURE 16 (NEW): SHORTAGE RESPONSE (not just inflation)
+# FIGURE 16 (NEW): ENDOGENOUS FEEDBACK LOOP - V/U SHOCK
+# Shows: vu → gw → W → ed → shortage → gcpi
 # =============================================================================
-print("\nCreating Figure 16: Shortage Response to Component Shocks...")
+print("\nCreating Figure 16: V/U Shock - Endogenous Feedback Loop...")
 
-fig, ax = plt.subplots(figsize=(12, 7))
+fig, axes = plt.subplots(2, 3, figsize=(16, 10))
 
-ax.plot(quarters, irf_excess_demand_f['shortage_simul'].values, color=colors['Excess Demand'],
-        linewidth=2, label='Excess Demand shock')
-ax.plot(quarters, irf_gscpi_f['shortage_simul'].values, color=colors['GSCPI'],
-        linewidth=2, label='GSCPI shock')
+# Panel A: V/U shock series
+ax1 = axes[0, 0]
+ax1.plot(quarters, irf_vu_f['vu_shock_series'].values, color=colors['V/U'], linewidth=2)
+ax1.set_title('(A) V/U Shock', fontsize=12, fontweight='bold')
+ax1.set_xlabel('Quarter', fontsize=10)
+ax1.set_ylabel('V/U Ratio', fontsize=10)
+ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax1.xaxis.grid(False)
+ax1.spines['top'].set_visible(False)
+ax1.spines['right'].set_visible(False)
 
-ax.set_title('Shortage index response to component shocks',
-             fontsize=17.5, fontweight='normal')
-ax.set_xlabel('Quarter', fontsize=16)
-ax.set_ylabel('Shortage Index', fontsize=16)
+# Panel B: Wage growth
+ax2 = axes[0, 1]
+ax2.plot(quarters, irf_vu_f['gw_simul'].values, color=colors['V/U'], linewidth=2)
+ax2.set_title('(B) Wage Growth Response', fontsize=12, fontweight='bold')
+ax2.set_xlabel('Quarter', fontsize=10)
+ax2.set_ylabel('Percent', fontsize=10)
+ax2.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax2.xaxis.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.axhline(y=0, color='black', linewidth=0.5)
 
-ax.set_xlim(0.5, 16.5)
-ax.set_xticks(range(1, 17))
+# Panel C: Log wage level
+ax3 = axes[0, 2]
+ax3.plot(quarters, irf_vu_f['log_w_simul'].values, color=colors['Wage Level'], linewidth=2)
+ax3.set_title('(C) Log Wage Level', fontsize=12, fontweight='bold')
+ax3.set_xlabel('Quarter', fontsize=10)
+ax3.set_ylabel('Log Level', fontsize=10)
+ax3.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax3.xaxis.grid(False)
+ax3.spines['top'].set_visible(False)
+ax3.spines['right'].set_visible(False)
+ax3.axhline(y=0, color='black', linewidth=0.5)
 
-ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
-ax.xaxis.grid(False)
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
-ax.axhline(y=0, color='black', linewidth=0.5)
+# Panel D: Excess demand (endogenous)
+ax4 = axes[1, 0]
+ax4.plot(quarters, irf_vu_f['ed_simul'].values, color=colors['Excess Demand'], linewidth=2)
+ax4.set_title('(D) Excess Demand (Endogenous)', fontsize=12, fontweight='bold')
+ax4.set_xlabel('Quarter', fontsize=10)
+ax4.set_ylabel('ED Index', fontsize=10)
+ax4.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax4.xaxis.grid(False)
+ax4.spines['top'].set_visible(False)
+ax4.spines['right'].set_visible(False)
+ax4.axhline(y=0, color='black', linewidth=0.5)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=2,
-          frameon=True, edgecolor='black', fancybox=False)
+# Panel E: Shortage (endogenous)
+ax5 = axes[1, 1]
+ax5.plot(quarters, irf_vu_f['shortage_simul'].values, color=colors['Shortage'], linewidth=2)
+ax5.set_title('(E) Shortage (Endogenous)', fontsize=12, fontweight='bold')
+ax5.set_xlabel('Quarter', fontsize=10)
+ax5.set_ylabel('Shortage Index', fontsize=10)
+ax5.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax5.xaxis.grid(False)
+ax5.spines['top'].set_visible(False)
+ax5.spines['right'].set_visible(False)
+ax5.axhline(y=0, color='black', linewidth=0.5)
 
+# Panel F: Inflation
+ax6 = axes[1, 2]
+ax6.plot(quarters, irf_vu_f['gcpi_simul'].values, color=colors['V/U'], linewidth=2)
+ax6.set_title('(F) Inflation Response', fontsize=12, fontweight='bold')
+ax6.set_xlabel('Quarter', fontsize=10)
+ax6.set_ylabel('Percent', fontsize=10)
+ax6.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax6.xaxis.grid(False)
+ax6.spines['top'].set_visible(False)
+ax6.spines['right'].set_visible(False)
+ax6.axhline(y=0, color='black', linewidth=0.5)
+
+plt.suptitle('V/U Shock: Endogenous Feedback Loop\n(vu → gw → W → ed → shortage → gcpi)',
+             fontsize=14, fontweight='bold', y=1.02)
 plt.tight_layout()
-plt.savefig(output_dir / 'figure_16_irf_shortage_response.png', dpi=300, bbox_inches='tight')
-plt.savefig(output_dir / 'figure_16_irf_shortage_response.pdf', bbox_inches='tight')
-print(f"  Saved to {output_dir / 'figure_16_irf_shortage_response.png'}")
+plt.savefig(output_dir / 'figure_16_irf_vu_feedback_loop.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_16_irf_vu_feedback_loop.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_16_irf_vu_feedback_loop.png'}")
 plt.show()
 
 
 # %%
 # =============================================================================
-# FIGURE 17 (NEW): WAGE RESPONSE TO NEW SHOCKS
+# FIGURE 17 (NEW): ENDOGENOUS FEEDBACK LOOP - CAPACITY UTILIZATION SHOCK
+# Shows: cu → gw → W → ed → shortage → gcpi
 # =============================================================================
-print("\nCreating Figure 17: Wage Response to New Model Shocks...")
+print("\nCreating Figure 17: Capacity Utilization Shock - Endogenous Feedback Loop...")
+
+fig, axes = plt.subplots(2, 3, figsize=(16, 10))
+
+# Panel A: CU shock series
+ax1 = axes[0, 0]
+ax1.plot(quarters, irf_gcu_f['gcu_shock_series'].values, color=colors['Capacity Util'], linewidth=2)
+ax1.set_title('(A) Capacity Utilization Shock', fontsize=12, fontweight='bold')
+ax1.set_xlabel('Quarter', fontsize=10)
+ax1.set_ylabel('CU (detrended)', fontsize=10)
+ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax1.xaxis.grid(False)
+ax1.spines['top'].set_visible(False)
+ax1.spines['right'].set_visible(False)
+
+# Panel B: Wage growth
+ax2 = axes[0, 1]
+ax2.plot(quarters, irf_gcu_f['gw_simul'].values, color=colors['Capacity Util'], linewidth=2)
+ax2.set_title('(B) Wage Growth Response', fontsize=12, fontweight='bold')
+ax2.set_xlabel('Quarter', fontsize=10)
+ax2.set_ylabel('Percent', fontsize=10)
+ax2.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax2.xaxis.grid(False)
+ax2.spines['top'].set_visible(False)
+ax2.spines['right'].set_visible(False)
+ax2.axhline(y=0, color='black', linewidth=0.5)
+
+# Panel C: Log wage level
+ax3 = axes[0, 2]
+ax3.plot(quarters, irf_gcu_f['log_w_simul'].values, color=colors['Wage Level'], linewidth=2)
+ax3.set_title('(C) Log Wage Level', fontsize=12, fontweight='bold')
+ax3.set_xlabel('Quarter', fontsize=10)
+ax3.set_ylabel('Log Level', fontsize=10)
+ax3.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax3.xaxis.grid(False)
+ax3.spines['top'].set_visible(False)
+ax3.spines['right'].set_visible(False)
+ax3.axhline(y=0, color='black', linewidth=0.5)
+
+# Panel D: Excess demand (endogenous)
+ax4 = axes[1, 0]
+ax4.plot(quarters, irf_gcu_f['ed_simul'].values, color=colors['Excess Demand'], linewidth=2)
+ax4.set_title('(D) Excess Demand (Endogenous)', fontsize=12, fontweight='bold')
+ax4.set_xlabel('Quarter', fontsize=10)
+ax4.set_ylabel('ED Index', fontsize=10)
+ax4.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax4.xaxis.grid(False)
+ax4.spines['top'].set_visible(False)
+ax4.spines['right'].set_visible(False)
+ax4.axhline(y=0, color='black', linewidth=0.5)
+
+# Panel E: Shortage (endogenous)
+ax5 = axes[1, 1]
+ax5.plot(quarters, irf_gcu_f['shortage_simul'].values, color=colors['Shortage'], linewidth=2)
+ax5.set_title('(E) Shortage (Endogenous)', fontsize=12, fontweight='bold')
+ax5.set_xlabel('Quarter', fontsize=10)
+ax5.set_ylabel('Shortage Index', fontsize=10)
+ax5.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax5.xaxis.grid(False)
+ax5.spines['top'].set_visible(False)
+ax5.spines['right'].set_visible(False)
+ax5.axhline(y=0, color='black', linewidth=0.5)
+
+# Panel F: Inflation
+ax6 = axes[1, 2]
+ax6.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'], linewidth=2)
+ax6.set_title('(F) Inflation Response', fontsize=12, fontweight='bold')
+ax6.set_xlabel('Quarter', fontsize=10)
+ax6.set_ylabel('Percent', fontsize=10)
+ax6.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+ax6.xaxis.grid(False)
+ax6.spines['top'].set_visible(False)
+ax6.spines['right'].set_visible(False)
+ax6.axhline(y=0, color='black', linewidth=0.5)
+
+plt.suptitle('Capacity Utilization Shock: Endogenous Feedback Loop\n(cu → gw → W → ed → shortage → gcpi)',
+             fontsize=14, fontweight='bold', y=1.02)
+plt.tight_layout()
+plt.savefig(output_dir / 'figure_17_irf_cu_feedback_loop.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_17_irf_cu_feedback_loop.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_17_irf_cu_feedback_loop.png'}")
+plt.show()
+
+
+# %%
+# =============================================================================
+# FIGURE 18 (NEW): WAGE RESPONSE TO LABOR MARKET SHOCKS
+# =============================================================================
+print("\nCreating Figure 18: Wage Response to Labor Market Shocks...")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 
@@ -454,9 +597,9 @@ ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=3,
           frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
-plt.savefig(output_dir / 'figure_17_irf_wage_response.png', dpi=300, bbox_inches='tight')
-plt.savefig(output_dir / 'figure_17_irf_wage_response.pdf', bbox_inches='tight')
-print(f"  Saved to {output_dir / 'figure_17_irf_wage_response.png'}")
+plt.savefig(output_dir / 'figure_18_irf_wage_response.png', dpi=300, bbox_inches='tight')
+plt.savefig(output_dir / 'figure_18_irf_wage_response.pdf', bbox_inches='tight')
+print(f"  Saved to {output_dir / 'figure_18_irf_wage_response.png'}")
 plt.show()
 
 
@@ -477,25 +620,29 @@ print(f"  V/U:        {irf_vu_f['gcpi_simul'].max():.4f} at quarter {irf_vu_f['g
 
 print(f"\nNew Model Shocks - Peak inflation response (one-time):")
 print("-"*60)
-print(f"  Excess Demand:    {irf_excess_demand_f['gcpi_simul'].max():.4f} at quarter {irf_excess_demand_f['gcpi_simul'].argmax() + 1}")
 print(f"  GSCPI:            {irf_gscpi_f['gcpi_simul'].max():.4f} at quarter {irf_gscpi_f['gcpi_simul'].argmax() + 1}")
 print(f"  Capacity Util:    {irf_gcu_f['gcpi_simul'].max():.4f} at quarter {irf_gcu_f['gcpi_simul'].argmax() + 1}")
 
 print(f"\nNew Model Shocks - Peak inflation response (persistent):")
 print("-"*60)
-print(f"  Excess Demand:    {irf_excess_demand_persistent_f['gcpi_simul'].max():.4f} at quarter {irf_excess_demand_persistent_f['gcpi_simul'].argmax() + 1}")
 print(f"  GSCPI:            {irf_gscpi_persistent_f['gcpi_simul'].max():.4f} at quarter {irf_gscpi_persistent_f['gcpi_simul'].argmax() + 1}")
 print(f"  Capacity Util:    {irf_gcu_persistent_f['gcpi_simul'].max():.4f} at quarter {irf_gcu_persistent_f['gcpi_simul'].argmax() + 1}")
 
-print(f"\nNew Model Shocks - Peak shortage response:")
+print(f"\nEndogenous Feedback Loop - V/U Shock:")
 print("-"*60)
-print(f"  Excess Demand:    {irf_excess_demand_f['shortage_simul'].max():.4f} at quarter {irf_excess_demand_f['shortage_simul'].argmax() + 1}")
-print(f"  GSCPI:            {irf_gscpi_f['shortage_simul'].max():.4f} at quarter {irf_gscpi_f['shortage_simul'].argmax() + 1}")
+print(f"  Peak wage growth:      {irf_vu_f['gw_simul'].max():.4f} at quarter {irf_vu_f['gw_simul'].argmax() + 1}")
+print(f"  Peak log wage level:   {irf_vu_f['log_w_simul'].max():.6f} at quarter {irf_vu_f['log_w_simul'].argmax() + 1}")
+print(f"  Peak excess demand:    {irf_vu_f['ed_simul'].max():.6f} at quarter {irf_vu_f['ed_simul'].argmax() + 1}")
+print(f"  Peak shortage:         {irf_vu_f['shortage_simul'].max():.4f} at quarter {irf_vu_f['shortage_simul'].argmax() + 1}")
+print(f"  Peak inflation:        {irf_vu_f['gcpi_simul'].max():.4f} at quarter {irf_vu_f['gcpi_simul'].argmax() + 1}")
 
-print(f"\nNew Model Shocks - Peak wage response:")
+print(f"\nEndogenous Feedback Loop - Capacity Utilization Shock:")
 print("-"*60)
-print(f"  V/U:              {irf_vu_f['gw_simul'].max():.4f} at quarter {irf_vu_f['gw_simul'].argmax() + 1}")
-print(f"  Capacity Util:    {irf_gcu_f['gw_simul'].max():.4f} at quarter {irf_gcu_f['gw_simul'].argmax() + 1}")
+print(f"  Peak wage growth:      {irf_gcu_f['gw_simul'].max():.4f} at quarter {irf_gcu_f['gw_simul'].argmax() + 1}")
+print(f"  Peak log wage level:   {irf_gcu_f['log_w_simul'].max():.6f} at quarter {irf_gcu_f['log_w_simul'].argmax() + 1}")
+print(f"  Peak excess demand:    {irf_gcu_f['ed_simul'].max():.6f} at quarter {irf_gcu_f['ed_simul'].argmax() + 1}")
+print(f"  Peak shortage:         {irf_gcu_f['shortage_simul'].max():.4f} at quarter {irf_gcu_f['shortage_simul'].argmax() + 1}")
+print(f"  Peak inflation:        {irf_gcu_f['gcpi_simul'].max():.4f} at quarter {irf_gcu_f['gcpi_simul'].argmax() + 1}")
 
 print("\n" + "="*80)
 print("PLOTTING COMPLETE!")
@@ -505,12 +652,13 @@ print("  Original BB:")
 print("    - figure_10_irf_supply_shocks.png/pdf")
 print("    - figure_11_irf_vu_shock.png/pdf")
 print("  New Model:")
-print("    - figure_12_irf_shortage_components.png/pdf [NEW]")
+print("    - figure_12_irf_gscpi_shock.png/pdf [NEW]")
 print("    - figure_13_irf_capacity_util.png/pdf [NEW]")
 print("    - figure_14_irf_persistent_comparison.png/pdf [NEW]")
 print("    - figure_15_irf_all_shocks.png/pdf [NEW]")
-print("    - figure_16_irf_shortage_response.png/pdf [NEW]")
-print("    - figure_17_irf_wage_response.png/pdf [NEW]")
+print("    - figure_16_irf_vu_feedback_loop.png/pdf [NEW]")
+print("    - figure_17_irf_cu_feedback_loop.png/pdf [NEW]")
+print("    - figure_18_irf_wage_response.png/pdf [NEW]")
 print("\n")
 
 # %%

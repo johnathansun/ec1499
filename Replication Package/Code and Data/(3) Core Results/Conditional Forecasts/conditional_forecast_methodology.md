@@ -224,6 +224,24 @@ $$
 
 ---
 
+## Comparison: Conditional Forecast vs. Decomposition
+
+Both simulations share the same model structure and compute excess demand endogenously, but differ in purpose:
+
+| Aspect | Conditional Forecast | Decomposition |
+|--------|---------------------|---------------|
+| **Purpose** | Forward projection | Historical attribution |
+| **Exogenous variables** | Steady-state values | Historical values |
+| **Wage constant** | Adjusted ($\alpha_0^{adj}$) | Original estimated ($\alpha_0$) |
+| **Excess demand** | Endogenous | Endogenous |
+| **TCU treatment** | Fixed at steady state (75%) | Historical values |
+
+The **wage constant adjustment** is the key difference: the conditional forecast must adjust the constant to ensure convergence to the target inflation rate, while the decomposition uses the original estimated constant to match historical dynamics.
+
+See `decomposition_methodology.md` for details on the decomposition approach.
+
+---
+
 ## Output Files
 
 The forecast generates three Excel files:
