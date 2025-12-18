@@ -114,3 +114,128 @@ $$
    - `USE_PRE_COVID_SAMPLE = False`: All equations use full sample (1989 Q1 - 2023 Q2)
    - `USE_PRE_COVID_SAMPLE = True`: Wage and expectations equations use pre-COVID sample (≤2019 Q4); shortage and price equations use full sample
 3. **Annualization:** Growth rates are annualized by multiplying quarterly log-differences by 400.
+
+---
+
+## Model Specifications and Configuration Flags
+
+The regression scripts support multiple model specifications via configuration flags:
+
+### Configuration Flags
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `USE_PRE_COVID_SAMPLE` | If True, wage and expectations equations estimated on pre-COVID sample (≤2019 Q4) | True |
+| `USE_LOG_CU_WAGES` | If True, use log-detrended CU; if False, use level-detrended CU | False |
+| `USE_CONTEMP_CU` | If True, include contemporaneous CU in wage equation (L0-L4); if False, only lags (L1-L4) | True |
+| `USE_DETRENDED_EXCESS_DEMAND` | If True, detrend excess demand by 40-quarter rolling mean | False |
+
+### Model Specification Summary
+
+| Specification | CU in Wages | Contemp CU | Log CU | Detrend ED | Description |
+|---------------|-------------|------------|--------|------------|-------------|
+| BB Original | No | - | - | - | Original Bernanke-Blanchard (no CU, exogenous shortage) |
+| New Base | Yes (L1-L4) | No | No | No | Adds CU to wages, endogenous shortage |
+| New +CU(0) | Yes (L0-L4) | Yes | No | No | Adds contemporaneous CU |
+| New +LogCU | Yes (L1-L4) | No | Yes | No | Uses log(CU) instead of level |
+| New +Log+CU(0) | Yes (L0-L4) | Yes | Yes | No | Log CU with contemporaneous |
+| New +DetrendED | Yes (L1-L4) | No | No | Yes | Detrends excess demand |
+
+---
+
+## Output Directories
+
+Output files are automatically named based on configuration:
+
+| Directory | Configuration |
+|-----------|---------------|
+| `Output Data (New)` | Full sample, base specification |
+| `Output Data (New Pre Covid)` | Pre-COVID sample, base specification |
+| `Output Data (New Pre Covid Contemp CU)` | Pre-COVID, contemporaneous CU |
+| `Output Data (New Pre Covid Log CU)` | Pre-COVID, log CU |
+| `Output Data (New Pre Covid Log CU Contemp CU)` | Pre-COVID, log CU + contemporaneous |
+| `Output Data (New Pre Covid Detrended ED)` | Pre-COVID, detrended excess demand |
+| `Old Output/Output Data (Pre Covid Sample)` | Original BB model |
+
+Each directory contains:
+- `eq_coefficients_*.xlsx` - Estimated coefficients for each equation
+- `eq_simulations_data_*.xlsx` - Data with fitted values and residuals
+- `summary_stats_*.xlsx` - Summary statistics (transposed format)
+
+---
+
+## Scripts
+
+### Main Regression Scripts
+
+| Script | Description |
+|--------|-------------|
+| `regression_new_model_refactored.py` | **Main script.** Declarative variable definitions, auto-generated summaries. Configure via flags at top. |
+| `regression_new_model_merged.py` | Original merged script (deprecated, use refactored version) |
+
+### Analysis Scripts
+
+| Script | Description |
+|--------|-------------|
+| `compare_model_specifications.py` | Compares out-of-sample RMSE across all model specifications |
+| `plot_excess_demand.py` | Plots excess demand time series |
+
+### Predicted vs. Actual
+
+| Script | Location |
+|--------|----------|
+| `plot_pred_v_actual_new_model.py` | `Predicted vs. Actual/` - Plots actual vs predicted for each variable |
+
+---
+
+## Out-of-Sample Performance Comparison
+
+RMSE for out-of-sample predictions (2020 Q1 onwards), estimated on pre-COVID sample:
+
+### Wage Growth Prediction
+
+| Model | RMSE | % vs BB |
+|-------|------|---------|
+| BB Original | 1.202 | 0% |
+| New Base | 1.452 | +21% |
+| New +CU(0) | 1.238 | +3% |
+| New +LogCU | 1.455 | +21% |
+| New +Log+CU(0) | 1.237 | +3% |
+| New +DetrendED | 1.452 | +21% |
+
+### Key Findings
+
+1. **BB Original has best wage prediction** - The original model without CU predicts wages best out-of-sample
+2. **Adding lagged CU hurts prediction** - New Base is 21% worse than BB Original
+3. **Contemporaneous CU recovers performance** - Adding CU(0) brings it to only 3% worse
+4. **Detrending ED doesn't affect wages** - ED only enters shortage equation, not wage equation
+5. **Inflation/expectations identical** - These equations are the same across New model variants
+
+### Interpretation
+
+Adding capacity utilization to the wage equation may overfit to the pre-COVID sample. The CU coefficients capture patterns that don't generalize to the COVID/post-COVID period. However, contemporaneous CU provides timelier information that partially compensates.
+
+---
+
+## Variable Construction Details
+
+### Capacity Utilization (cu)
+
+**Level-detrended (default):**
+$$cu_t = \frac{TCU_t - \bar{TCU}_t^{40q}}{100}$$
+
+**Log-detrended (USE_LOG_CU_WAGES=True):**
+$$cu_t = \ln(TCU_t/100) - \ln(\bar{TCU}_t^{40q}/100)$$
+
+### Excess Demand
+
+**Raw excess demand:**
+$$ed_t^{raw} = \ln(W_t) - \ln(NGDPPOT_t) - \ln(TCU_t/100)$$
+
+**Detrended (USE_DETRENDED_EXCESS_DEMAND=True):**
+$$ed_t = ed_t^{raw} - \bar{ed}_t^{40q}$$
+
+where $\bar{ed}_t^{40q}$ is the 40-quarter rolling mean.
+
+**Non-detrended (default):**
+$$ed_t = ed_t^{raw}$$

@@ -32,6 +32,9 @@ warnings.filterwarnings('ignore')
 # Set to True for pre-COVID sample estimation, False for full sample
 USE_PRE_COVID_SAMPLE = True
 
+USE_LOG_CU_WAGES = False
+USE_CONTEMP_CU = True
+
 #****************************CHANGE PATH HERE***********************************
 
 # Input Location
@@ -39,10 +42,10 @@ input_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code
 
 # Output Location (automatically set based on configuration)
 if USE_PRE_COVID_SAMPLE:
-    output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model Pre Covid)")
+    output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Pre Covid Contemp CU)")
     output_suffix = "_pre_covid"
 else:
-    output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)")
+    output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data (New Contemp CU)")
     output_suffix = ""
 
 output_dir.mkdir(parents=True, exist_ok=True)
@@ -160,7 +163,10 @@ df['log_w'] = np.log(df['ECIWAG'])
 # Detrend capacity utilization: log(TCU) - log(10-year rolling mean of TCU)
 df['log_tcu'] = np.log(df['tcu']/100)
 df['log_tcu_trend'] = np.log(df['tcu'].rolling(window=40, min_periods=20).mean()/100)
-df['cu'] = df['log_tcu'] - df['log_tcu_trend']
+if USE_LOG_CU_WAGES:
+    df['cu'] = df['log_tcu'] - df['log_tcu_trend']
+else:
+    df['cu'] = (df['tcu'] - df['tcu'].rolling(window=40, min_periods=20).mean()) / 100
 
 # Excess demand proxy (uses raw log TCU, then detrend excess demand itself)
 df['excess_demand'] = df['log_w'] - df['log_ngdppot'] - df['log_tcu']
@@ -335,12 +341,20 @@ for i in range(1, 5):
 df['L1_magpty'] = df['magpty'].shift(1)
 
 # Build X matrix for wage equation - includes capacity utilization
-X_wage_cols = ['L1_gw', 'L2_gw', 'L3_gw', 'L4_gw',
-               'L1_cf1', 'L2_cf1', 'L3_cf1', 'L4_cf1',
-               'L1_magpty',
-               'L1_vu', 'L2_vu', 'L3_vu', 'L4_vu',
-               'L1_diffcpicf', 'L2_diffcpicf', 'L3_diffcpicf', 'L4_diffcpicf',
-               'L1_cu', 'L2_cu', 'L3_cu', 'L4_cu']
+if USE_CONTEMP_CU:
+    X_wage_cols = ['L1_gw', 'L2_gw', 'L3_gw', 'L4_gw',
+                   'L1_cf1', 'L2_cf1', 'L3_cf1', 'L4_cf1',
+                   'L1_magpty',
+                   'L1_vu', 'L2_vu', 'L3_vu', 'L4_vu',
+                   'L1_diffcpicf', 'L2_diffcpicf', 'L3_diffcpicf', 'L4_diffcpicf',
+                   'cu', 'L1_cu', 'L2_cu', 'L3_cu', 'L4_cu']
+else:
+    X_wage_cols = ['L1_gw', 'L2_gw', 'L3_gw', 'L4_gw',
+                'L1_cf1', 'L2_cf1', 'L3_cf1', 'L4_cf1',
+                'L1_magpty',
+                'L1_vu', 'L2_vu', 'L3_vu', 'L4_vu',
+                'L1_diffcpicf', 'L2_diffcpicf', 'L3_diffcpicf', 'L4_diffcpicf',
+                'L1_cu', 'L2_cu', 'L3_cu', 'L4_cu']
 
 # Add COVID dummies only in full sample mode
 if not USE_PRE_COVID_SAMPLE:
@@ -384,23 +398,30 @@ with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx
     coef_df.to_excel(writer, sheet_name='gw', index=False)
 
 # Compute sum of coefficients
+# Indices depend on whether contemporaneous CU is included
 const_offset = 1
 sum_gw = sum(results_wage.params[const_offset + i] for i in range(0, 4))
 sum_cf1 = sum(results_wage.params[const_offset + 4 + i] for i in range(0, 4))
 sum_vu = sum(results_wage.params[const_offset + 9 + i] for i in range(0, 4))
 sum_diffcpicf = sum(results_wage.params[const_offset + 13 + i] for i in range(0, 4))
-sum_cu = sum(results_wage.params[const_offset + 17 + i] for i in range(0, 4))
+
+# CU terms: 5 terms if contemporaneous included (cu, L1-L4), else 4 terms (L1-L4)
+n_cu_terms = 5 if USE_CONTEMP_CU else 4
+cu_start_idx = const_offset + 17  # CU terms start after diffcpicf
+sum_cu = sum(results_wage.params[cu_start_idx + i] for i in range(n_cu_terms))
+cu_label = "cu through L4" if USE_CONTEMP_CU else "L1-L4 cu"
 
 print(f"\nSum of coefficients:")
 print(f"  L1-L4 gw:       {sum_gw:.6f}")
 print(f"  L1-L4 cf1:      {sum_cf1:.6f}")
 print(f"  L1-L4 vu:       {sum_vu:.6f}")
 print(f"  L1-L4 diffcpicf:{sum_diffcpicf:.6f}")
-print(f"  L1-L4 cu:       {sum_cu:.6f} [NEW]")
+print(f"  {cu_label}:       {sum_cu:.6f} [NEW]")
 
 # Test significance of capacity utilization
-p_sum_cu = f_test_sum(results_wage, [const_offset + 17 + i for i in range(0, 4)])
-p_joint_cu = f_test_joint(results_wage, [const_offset + 17 + i for i in range(0, 4)])
+cu_indices = [cu_start_idx + i for i in range(n_cu_terms)]
+p_sum_cu = f_test_sum(results_wage, cu_indices)
+p_joint_cu = f_test_joint(results_wage, cu_indices)
 print(f"\nCapacity utilization significance:")
 print(f"  Sum = 0 test p-value:   {p_sum_cu:.6f}")
 print(f"  Joint test p-value:     {p_joint_cu:.6f}")
@@ -802,7 +823,7 @@ summary_wage = pd.DataFrame({
         'l1.cf1 through l4.cf1',
         'l1.vu through l4.vu',
         'l1.diffcpicf through l4.diffcpicf',
-        'l1.cu through l4.cu [NEW]',
+        f'{cu_label} [NEW]',
         'l1.magpty',
         '',
         r2_label,
