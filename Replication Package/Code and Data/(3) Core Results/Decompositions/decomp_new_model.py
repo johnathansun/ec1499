@@ -5,9 +5,16 @@
 Modified Bernanke-Blanchard Model - Decomposition
 Liang & Sun (2025)
 
-This script generates decomposition analysis for the modified model.
+This script generates decomposition analysis for the modified model with
+support for multiple model specifications.
 
-Key modifications from original:
+Configuration flags at the top control:
+- USE_PRE_COVID_SAMPLE: Whether to use pre-COVID sample estimates
+- USE_LOG_CU_WAGES: Use log(CU) vs level CU in wage equation
+- USE_CONTEMP_CU: Include contemporaneous CU (L0) in wage equation
+- USE_DETRENDED_EXCESS_DEMAND: Detrend excess demand in shortage equation
+
+Key modifications from original BB:
 1. Wage equation includes detrended capacity utilization level (cu)
 2. Shortage is ENDOGENOUS: shortage = f(lagged_shortage, excess_demand, GSCPI)
 3. New decomposition channels:
@@ -33,14 +40,60 @@ import numpy as np
 from pathlib import Path
 
 # %%
+#****************************CONFIGURATION**************************************
+# These flags MUST match the specification used in the regression!
 
-#****************************CHANGE PATH HERE************************************
-# Input Location - coefficients and data from regression_new_model.py
-coef_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_coefficients_new_model.xlsx")
-data_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_simulations_data_new_model.xlsx")
+USE_PRE_COVID_SAMPLE = False       # Use pre-COVID sample estimates
+USE_LOG_CU_WAGES = False          # True = log(CU), False = level CU
+USE_CONTEMP_CU = False             # True = CU lags 0-4, False = CU lags 1-4
+USE_DETRENDED_EXCESS_DEMAND = True  # Detrend excess demand in shortage eq
+
+#****************************PATH CONFIGURATION*********************************
+
+BASE_DIR = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data")
+
+# Build directory names based on configuration (must match regression output)
+def get_spec_dir_name():
+    """Build output directory name based on configuration flags."""
+    parts = ["Output Data (New"]
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre Covid")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    if USE_CONTEMP_CU:
+        parts.append("Contemp CU")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return " ".join(parts) + ")"
+
+def get_spec_short_name():
+    """Get a short name for the specification (for output messages)."""
+    parts = []
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre-COVID")
+    else:
+        parts.append("Full Sample")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    else:
+        parts.append("Level CU")
+    if USE_CONTEMP_CU:
+        parts.append("L0-L4")
+    else:
+        parts.append("L1-L4")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return ", ".join(parts)
+
+SPEC_DIR_NAME = get_spec_dir_name()
+SPEC_SHORT_NAME = get_spec_short_name()
+
+# Input Location - coefficients and data from regression
+coef_path = BASE_DIR / "(2) Regressions" / SPEC_DIR_NAME / "eq_coefficients_new_model.xlsx"
+data_path = BASE_DIR / "(2) Regressions" / SPEC_DIR_NAME / "eq_simulations_data_new_model.xlsx"
 
 # Output Location
-output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Output Data Python (New Model)")
+output_dir = BASE_DIR / "(3) Core Results/Decompositions/Output Data Python (New Model)" / SPEC_DIR_NAME
 output_dir.mkdir(parents=True, exist_ok=True)
 
 #*********************************************************************************
@@ -49,6 +102,15 @@ print("="*80)
 print("MODIFIED MODEL DECOMPOSITION")
 print("Liang & Sun (2025)")
 print("="*80)
+
+print(f"\nSpecification: {SPEC_SHORT_NAME}")
+print(f"  USE_PRE_COVID_SAMPLE:        {USE_PRE_COVID_SAMPLE}")
+print(f"  USE_LOG_CU_WAGES:            {USE_LOG_CU_WAGES}")
+print(f"  USE_CONTEMP_CU:              {USE_CONTEMP_CU}")
+print(f"  USE_DETRENDED_EXCESS_DEMAND: {USE_DETRENDED_EXCESS_DEMAND}")
+
+print(f"\nInput directory:  {SPEC_DIR_NAME}")
+print(f"Output directory: {output_dir}")
 
 print("\nLoading data and coefficients...")
 
@@ -280,6 +342,32 @@ def dynamic_simul_new_model(data, coef_path,
         # =====================================================================
         # STEP 1: WAGE EQUATION (computed first since ED depends on wages)
         # =====================================================================
+        # Coefficient indices depend on USE_CONTEMP_CU
+        # Base structure: const, gw[1-4], cf1[1-4], magpty[-1], vu[1-4], diffcpicf[1-4], cu[...], dummies
+        # With contemp CU: cu has 5 terms (L0-L4), indices 18-22, dummies 23-24
+        # Without contemp CU: cu has 4 terms (L1-L4), indices 18-21, dummies 22-23
+
+        # Calculate CU contribution based on specification
+        if USE_CONTEMP_CU:
+            # CU lags 0-4 (5 terms)
+            cu_contrib = (
+                gw_beta[18] * cu_simul[t] +
+                gw_beta[19] * cu_simul[t-1] +
+                gw_beta[20] * cu_simul[t-2] +
+                gw_beta[21] * cu_simul[t-3] +
+                gw_beta[22] * cu_simul[t-4]
+            )
+            dummy_idx = 23
+        else:
+            # CU lags 1-4 (4 terms)
+            cu_contrib = (
+                gw_beta[18] * cu_simul[t-1] +
+                gw_beta[19] * cu_simul[t-2] +
+                gw_beta[20] * cu_simul[t-3] +
+                gw_beta[21] * cu_simul[t-4]
+            )
+            dummy_idx = 22
+
         gw_simul[t] = (
             gw_beta[0] +  # constant
             gw_beta[1] * gw_simul[t-1] +
@@ -299,12 +387,9 @@ def dynamic_simul_new_model(data, coef_path,
             gw_beta[15] * diffcpicf_simul[t-2] +
             gw_beta[16] * diffcpicf_simul[t-3] +
             gw_beta[17] * diffcpicf_simul[t-4] +
-            gw_beta[18] * cu_simul[t-1] +
-            gw_beta[19] * cu_simul[t-2] +
-            gw_beta[20] * cu_simul[t-3] +
-            gw_beta[21] * cu_simul[t-4] +
-            gw_beta[22] * dummy_q2_simul[t] +
-            gw_beta[23] * dummy_q3_simul[t]
+            cu_contrib +
+            gw_beta[dummy_idx] * dummy_q2_simul[t] +
+            gw_beta[dummy_idx + 1] * dummy_q3_simul[t]
         )
 
         # =====================================================================
@@ -454,6 +539,27 @@ def dynamic_simul_new_model(data, coef_path,
 
     for t in range(4, timesteps):
         # STEP 1: Wage equation (baseline)
+        # Calculate CU contribution based on specification
+        if USE_CONTEMP_CU:
+            # CU lags 0-4 (5 terms)
+            cu_contrib_baseline = (
+                gw_beta[18] * cu[t] +
+                gw_beta[19] * cu[t-1] +
+                gw_beta[20] * cu[t-2] +
+                gw_beta[21] * cu[t-3] +
+                gw_beta[22] * cu[t-4]
+            )
+            dummy_idx_baseline = 23
+        else:
+            # CU lags 1-4 (4 terms)
+            cu_contrib_baseline = (
+                gw_beta[18] * cu[t-1] +
+                gw_beta[19] * cu[t-2] +
+                gw_beta[20] * cu[t-3] +
+                gw_beta[21] * cu[t-4]
+            )
+            dummy_idx_baseline = 22
+
         gw_baseline[t] = (
             gw_beta[0] +
             gw_beta[1] * gw_baseline[t-1] +
@@ -473,12 +579,9 @@ def dynamic_simul_new_model(data, coef_path,
             gw_beta[15] * diffcpicf_baseline[t-2] +
             gw_beta[16] * diffcpicf_baseline[t-3] +
             gw_beta[17] * diffcpicf_baseline[t-4] +
-            gw_beta[18] * cu[t-1] +
-            gw_beta[19] * cu[t-2] +
-            gw_beta[20] * cu[t-3] +
-            gw_beta[21] * cu[t-4] +
-            gw_beta[22] * dummy_q2[t] +
-            gw_beta[23] * dummy_q3[t]
+            cu_contrib_baseline +
+            gw_beta[dummy_idx_baseline] * dummy_q2[t] +
+            gw_beta[dummy_idx_baseline + 1] * dummy_q3[t]
         )
 
         # STEP 2: Update levels and compute excess demand (endogenous)
@@ -894,9 +997,34 @@ print("  2. Supply-chain-driven shortages (GSCPI)")
 print("\nThis allows us to answer: How much of the 'shortage-driven' inflation")
 print("was actually caused by demand outpacing supply capacity?")
 
+# Save configuration for reference
+config_df = pd.DataFrame({
+    'Parameter': [
+        'USE_PRE_COVID_SAMPLE',
+        'USE_LOG_CU_WAGES',
+        'USE_CONTEMP_CU',
+        'USE_DETRENDED_EXCESS_DEMAND',
+        'Specification Name',
+        'Input Directory',
+        'Output Directory'
+    ],
+    'Value': [
+        USE_PRE_COVID_SAMPLE,
+        USE_LOG_CU_WAGES,
+        USE_CONTEMP_CU,
+        USE_DETRENDED_EXCESS_DEMAND,
+        SPEC_SHORT_NAME,
+        str(SPEC_DIR_NAME),
+        str(output_dir)
+    ]
+})
+config_df.to_excel(output_dir / 'decomp_config.xlsx', index=False)
+print(f"\n  Saved decomp_config.xlsx")
+
 print("\n" + "="*80)
 print("DECOMPOSITION COMPLETE!")
 print("="*80)
+print(f"\nSpecification: {SPEC_SHORT_NAME}")
 print("\n")
 
 # %%

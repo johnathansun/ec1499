@@ -5,7 +5,12 @@
 Modified Bernanke-Blanchard Model - Decomposition Plots
 Liang & Sun (2025)
 
-This file generates decomposition plots for the modified model.
+This file generates decomposition plots for the modified model with
+support for multiple model specifications.
+
+Configuration flags at the top control which specification to plot.
+The script automatically loads the appropriate decomposition results
+based on the configuration.
 
 Generates:
 - Figure 12 (New): Sources of Price Inflation (with new channels)
@@ -23,13 +28,59 @@ import matplotlib.patches as mpatches
 from pathlib import Path
 
 # %%
+#****************************CONFIGURATION**************************************
+# These flags MUST match the specification used in decomp_new_model.py!
 
-#****************************CHANGE PATH HERE************************************
+USE_PRE_COVID_SAMPLE = False       # Use pre-COVID sample estimates
+USE_LOG_CU_WAGES = False          # True = log(CU), False = level CU
+USE_CONTEMP_CU = False             # True = CU lags 0-4, False = CU lags 1-4
+USE_DETRENDED_EXCESS_DEMAND = True  # Detrend excess demand in shortage eq
+
+#****************************PATH CONFIGURATION*********************************
+
+BASE_DIR = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data")
+
+# Build directory names based on configuration (must match decomp_new_model.py output)
+def get_spec_dir_name():
+    """Build output directory name based on configuration flags."""
+    parts = ["Output Data (New"]
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre Covid")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    if USE_CONTEMP_CU:
+        parts.append("Contemp CU")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return " ".join(parts) + ")"
+
+def get_spec_short_name():
+    """Get a short name for the specification (for plot titles)."""
+    parts = []
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre-COVID")
+    else:
+        parts.append("Full Sample")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    else:
+        parts.append("Level CU")
+    if USE_CONTEMP_CU:
+        parts.append("L0-L4")
+    else:
+        parts.append("L1-L4")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return ", ".join(parts)
+
+SPEC_DIR_NAME = get_spec_dir_name()
+SPEC_SHORT_NAME = get_spec_short_name()
+
 # Input Location - output from decomp_new_model.py
-input_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Output Data Python (New Model)")
+input_dir = BASE_DIR / "(3) Core Results/Decompositions/Output Data Python (New Model)" / SPEC_DIR_NAME
 
 # Output Location for figures
-output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Figures Python (New Model)")
+output_dir = BASE_DIR / "(3) Core Results/Decompositions/Figures Python (New Model)" / SPEC_DIR_NAME
 output_dir.mkdir(parents=True, exist_ok=True)
 
 #*********************************************************************************
@@ -38,6 +89,15 @@ print("="*80)
 print("MODIFIED MODEL DECOMPOSITION PLOTS")
 print("Liang & Sun (2025)")
 print("="*80)
+
+print(f"\nSpecification: {SPEC_SHORT_NAME}")
+print(f"  USE_PRE_COVID_SAMPLE:        {USE_PRE_COVID_SAMPLE}")
+print(f"  USE_LOG_CU_WAGES:            {USE_LOG_CU_WAGES}")
+print(f"  USE_CONTEMP_CU:              {USE_CONTEMP_CU}")
+print(f"  USE_DETRENDED_EXCESS_DEMAND: {USE_DETRENDED_EXCESS_DEMAND}")
+
+print(f"\nInput directory:  {input_dir}")
+print(f"Output directory: {output_dir}")
 
 print("\nLoading decomposition results...")
 
@@ -214,7 +274,7 @@ for component in stack_order_price:
 # Add actual inflation line
 ax.plot(x, actual_gcpi, color='black', linewidth=2, label='Actual Inflation', marker='', zorder=10)
 
-ax.set_title('Price inflation decomposition',
+ax.set_title(f'Price inflation decomposition\n({SPEC_SHORT_NAME})',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -289,7 +349,7 @@ for component in stack_order_wage:
 
 ax.plot(x, actual_gw, color='black', linewidth=2, label='Actual Wage Inflation', marker='', zorder=10)
 
-ax.set_title('Wage inflation decomposition',
+ax.set_title(f'Wage inflation decomposition\n({SPEC_SHORT_NAME})',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -359,7 +419,7 @@ for component in stack_order_shortage:
 ax.plot(x, actual_shortage, color='black', linewidth=2, label='Actual Shortage Index', marker='', zorder=10)
 ax.plot(x, simulated_shortage, color='black', linewidth=2, linestyle='--', label='Simulated Shortage', marker='', zorder=10)
 
-ax.set_title('Shortage decomposition',
+ax.set_title(f'Shortage decomposition\n({SPEC_SHORT_NAME})',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Shortage Index', fontsize=16)
@@ -435,7 +495,7 @@ for component in stack_order_alt:
 # Add actual inflation line
 ax.plot(x, actual_gcpi, color='black', linewidth=2, label='Actual Inflation', marker='', zorder=10)
 
-ax.set_title('Price inflation decomposition (break down shortages)',
+ax.set_title(f'Price inflation decomposition (break down shortages)\n({SPEC_SHORT_NAME})',
              fontsize=16, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -540,7 +600,7 @@ handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual'))
 fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.02),
            ncol=6, frameon=True, edgecolor='black', fancybox=False, fontsize=10)
 
-plt.suptitle('Inflation Decomposition: Standard vs Alternative (New Model)',
+plt.suptitle(f'Inflation Decomposition: Standard vs Alternative\n({SPEC_SHORT_NAME})',
              fontsize=16, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.savefig(output_dir / 'figure_16_comparison_decomposition.png', dpi=300, bbox_inches='tight')
@@ -649,7 +709,7 @@ handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual'))
 fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.02),
            ncol=6, frameon=True, edgecolor='black', fancybox=False, fontsize=10)
 
-plt.suptitle('Decomposition of Pandemic-Era Inflation (Modified Model)',
+plt.suptitle(f'Decomposition of Pandemic-Era Inflation\n({SPEC_SHORT_NAME})',
              fontsize=16, fontweight='bold', y=1.02)
 plt.tight_layout()
 plt.savefig(output_dir / 'figure_17_combined_decomposition.png', dpi=300, bbox_inches='tight')
@@ -1036,7 +1096,7 @@ if has_component_data:
     fig.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, 0.02),
                ncol=4, frameon=True, edgecolor='black', fancybox=False, fontsize=11)
 
-    plt.suptitle('Decomposition of Excess Demand Effects (Modified Model)',
+    plt.suptitle(f'Decomposition of Excess Demand Effects\n({SPEC_SHORT_NAME})',
                  fontsize=16, fontweight='bold', y=1.02)
     plt.tight_layout()
     plt.savefig(output_dir / 'figure_21_ed_components_combined.png', dpi=300, bbox_inches='tight')

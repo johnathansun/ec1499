@@ -24,8 +24,8 @@ warnings.filterwarnings('ignore')
 
 USE_PRE_COVID_SAMPLE = False
 USE_LOG_CU_WAGES = False
-USE_CONTEMP_CU = False
-USE_DETRENDED_EXCESS_DEMAND = False
+USE_CONTEMP_CU = True
+USE_DETRENDED_EXCESS_DEMAND = True
 
 #****************************CHANGE PATH HERE***********************************
 
@@ -416,6 +416,18 @@ print(f"Sample size: {len(df)} observations")
 for var in ['gw', 'cf1', 'vu', 'diffcpicf', 'cu', 'shortage', 'excess_demand', 'gscpi', 'gcpi', 'grpe', 'grpf', 'cf10']:
     create_lags(df, var, max_lag=4)
 df['L1_magpty'] = df['magpty'].shift(1)
+
+
+# %% 
+# plot some stuff
+import seaborn as sns
+import matplotlib.pyplot as plt
+# set dpi to 300
+plt.rcParams['figure.dpi'] = 300
+sns.lineplot(x='period', y='excess_demand', data=df, label='Excess Demand')
+plt.ylabel('Excess Demand')
+plt.xlabel('Date')
+plt.title('Excess Demand')
 
 # %%
 #*******************************************************************************
