@@ -36,7 +36,7 @@ from pathlib import Path
 
 USE_PRE_COVID_SAMPLE = False       # Use pre-COVID sample estimates
 USE_LOG_CU_WAGES = False          # True = log(CU), False = level CU
-USE_CONTEMP_CU = True             # True = CU lags 0-4, False = CU lags 1-4
+USE_CONTEMP_CU = False             # True = CU lags 0-4, False = CU lags 1-4
 USE_DETRENDED_EXCESS_DEMAND = True  # Detrend excess demand in shortage eq
 
 #****************************PATH CONFIGURATION*********************************
@@ -213,16 +213,8 @@ ax.plot(quarters, irf_energy_f['gcpi_simul'].values, color=colors['Energy'],
         linewidth=2, label='Energy Prices')
 ax.plot(quarters, irf_food_f['gcpi_simul'].values, color=colors['Food'],
         linewidth=2, label='Food Prices')
-# ax.plot(quarters, irf_shortage_f['gcpi_simul'].values, color=colors['Shortage'],
-#         linewidth=2, label='Shortages')
-# ax.plot(quarters, irf_gscpi_f['gcpi_simul'].values, color=colors['GSCPI'],
-#         linewidth=2, label='Supply Chain Pressure')
-# ax.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'],
-#         linewidth=2, label='Capacity Utilization')
-# ax.plot(quarters, irf_ngdppot_f['gcpi_simul'].values, color=colors['Potential GDP'],
-#         linewidth=2, label='Potential GDP')
 
-ax.set_title(f'Inflation response to supply shocks\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Inflation response to food/energy shocks',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -248,7 +240,7 @@ plt.show()
 
 
 # %%
-print("\nCreating Figure 10: Original BB Supply Shocks...")
+print("\nCreating Figure 11: Original BB Supply Shocks...")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 
@@ -259,14 +251,14 @@ ax.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'],
 ax.plot(quarters, irf_ngdppot_f['gcpi_simul'].values, color=colors['Potential GDP'],
         linewidth=2, label='Potential GDP')
 
-ax.set_title(f'Inflation response to supply shocks\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Inflation response to additional shocks',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
 
 ax.set_xlim(0.5, 16.5)
 ax.set_xticks(range(1, 17))
-ax.set_ylim(-0.5, 2.5)
+ax.set_ylim(-0.5, 0.75)
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
@@ -278,6 +270,7 @@ ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.10), ncol=3,
           frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
+plt.savefig(output_dir / 'figure_11_supply_shock.pdf', bbox_inches='tight')
 
 
 # %%
@@ -290,14 +283,14 @@ fig, ax = plt.subplots(figsize=(12, 7))
 
 ax.plot(quarters, irf_vu_f['gcpi_simul'].values, color=colors['V/U'], linewidth=2)
 
-ax.set_title(f'Inflation response to V/U shock (persistent)\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Inflation response to persistent V/U shock',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
 
 ax.set_xlim(0.5, 16.5)
 ax.set_xticks(range(1, 17))
-ax.set_ylim(0.0, 2.0)
+ax.set_ylim(0.0, 1.5)
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
@@ -324,9 +317,9 @@ ax1 = axes[0]
 ax1.plot(quarters, irf_gscpi_f['gcpi_simul'].values, color=colors['GSCPI'],
         linewidth=2, label='One-time')
 ax1.plot(quarters, irf_gscpi_persistent_f['gcpi_simul'].values, color=colors['GSCPI'],
-        linewidth=2, linestyle='--', label='Persistent (rho=0.9)')
+        linewidth=2, linestyle='--', label='Persistent')
 
-ax1.set_title('(A) Inflation Response', fontsize=14, fontweight='bold')
+ax1.set_title('(A) Inflation Response', fontsize=14)
 ax1.set_xlabel('Quarter', fontsize=12)
 ax1.set_ylabel('Percent', fontsize=12)
 ax1.set_xlim(0.5, 16.5)
@@ -343,9 +336,9 @@ ax2 = axes[1]
 ax2.plot(quarters, irf_gscpi_f['shortage_simul'].values, color=colors['GSCPI'],
         linewidth=2, label='One-time')
 ax2.plot(quarters, irf_gscpi_persistent_f['shortage_simul'].values, color=colors['GSCPI'],
-        linewidth=2, linestyle='--', label='Persistent (rho=0.9)')
+        linewidth=2, linestyle='--', label='Persistent')
 
-ax2.set_title('(B) Shortage Response', fontsize=14, fontweight='bold')
+ax2.set_title('(B) Shortage Response', fontsize=14)
 ax2.set_xlabel('Quarter', fontsize=12)
 ax2.set_ylabel('Shortage Index', fontsize=12)
 ax2.set_xlim(0.5, 16.5)
@@ -357,8 +350,8 @@ ax2.spines['right'].set_visible(False)
 ax2.axhline(y=0, color='black', linewidth=0.5)
 ax2.legend(loc='best', fontsize=10)
 
-plt.suptitle(f'Response to GSCPI (Supply Chain Pressure) Shock\n({SPEC_SHORT_NAME})',
-             fontsize=16, fontweight='bold', y=1.02)
+plt.suptitle(f'Response to supply chain pressure',
+             fontsize=16)
 plt.tight_layout()
 plt.savefig(output_dir / 'figure_12_irf_gscpi_shock.png', dpi=300, bbox_inches='tight')
 plt.savefig(output_dir / 'figure_12_irf_gscpi_shock.pdf', bbox_inches='tight')
@@ -375,13 +368,12 @@ print("\nCreating Figure 13: Capacity Utilization Shock...")
 fig, ax = plt.subplots(figsize=(12, 7))
 
 ax.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'],
-        linewidth=2, label='One-time shock')
+        linewidth=2, label='One-time')
 ax.plot(quarters, irf_gcu_persistent_f['gcpi_simul'].values, color=colors['Capacity Util'],
-        linewidth=2, linestyle='--', label='Persistent shock (rho=0.9)')
+        linewidth=2, linestyle='--', label='Persistent')
 
 cu_type = "log(CU)" if USE_LOG_CU_WAGES else "level CU"
-ax.set_title(f'Inflation response to capacity utilization shock ({cu_type})\n'
-             f'(via wage equation -> excess demand -> shortage)\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Inflation response to capacity utilization shock',
              fontsize=16, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)

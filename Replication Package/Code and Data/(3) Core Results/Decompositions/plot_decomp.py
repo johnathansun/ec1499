@@ -23,10 +23,10 @@ from pathlib import Path
 
 #****************************CHANGE PATH HERE************************************
 # Input Location - output from decomp.py
-input_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Output Data Python")
+input_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Deprecated/Output Data Python")
 
 # Output Location for figures
-output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Figures Python")
+output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Decompositions/Deprecated/Output Data Python")
 output_dir.mkdir(parents=True, exist_ok=True)
 
 #*********************************************************************************

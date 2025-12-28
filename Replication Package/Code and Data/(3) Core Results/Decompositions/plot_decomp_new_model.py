@@ -274,7 +274,7 @@ for component in stack_order_price:
 # Add actual inflation line
 ax.plot(x, actual_gcpi, color='black', linewidth=2, label='Actual Inflation', marker='', zorder=10)
 
-ax.set_title(f'Price inflation decomposition\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Original sources of price inflation (BB)',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -284,8 +284,8 @@ tick_labels_subset = [quarter_labels[i] for i in tick_positions]
 ax.set_xticks(tick_positions)
 ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
 
-ax.set_ylim(-4, 12)
-ax.set_yticks(np.arange(-4, 13, 2))
+ax.set_ylim(-5, 11)
+ax.set_yticks(np.arange(-4, 12, 2))
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax.xaxis.grid(False)
@@ -349,15 +349,15 @@ for component in stack_order_wage:
 
 ax.plot(x, actual_gw, color='black', linewidth=2, label='Actual Wage Inflation', marker='', zorder=10)
 
-ax.set_title(f'Wage inflation decomposition\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Sources of wage inflation',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
 
 ax.set_xticks(tick_positions)
 ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
-ax.set_ylim(-4, 10)
-ax.set_yticks(np.arange(-4, 11, 2))
+ax.set_ylim(-6, 8)
+ax.set_yticks(np.arange(-5, 8, 2))
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax.xaxis.grid(False)
@@ -419,7 +419,7 @@ for component in stack_order_shortage:
 ax.plot(x, actual_shortage, color='black', linewidth=2, label='Actual Shortage Index', marker='', zorder=10)
 ax.plot(x, simulated_shortage, color='black', linewidth=2, linestyle='--', label='Simulated Shortage', marker='', zorder=10)
 
-ax.set_title(f'Shortage decomposition\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Sources of shortage index',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Shortage Index', fontsize=16)
@@ -495,7 +495,7 @@ for component in stack_order_alt:
 # Add actual inflation line
 ax.plot(x, actual_gcpi, color='black', linewidth=2, label='Actual Inflation', marker='', zorder=10)
 
-ax.set_title(f'Price inflation decomposition (break down shortages)\n({SPEC_SHORT_NAME})',
+ax.set_title(f'Sources of price inflation',
              fontsize=16, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
@@ -503,8 +503,8 @@ ax.set_ylabel('Percent', fontsize=16)
 ax.set_xticks(tick_positions)
 ax.set_xticklabels(tick_labels_subset, rotation=0, ha='center')
 
-ax.set_ylim(-4, 12)
-ax.set_yticks(np.arange(-4, 13, 2))
+ax.set_ylim(-5, 11)
+ax.set_yticks(np.arange(-4, 12, 2))
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax.xaxis.grid(False)
@@ -554,7 +554,7 @@ ax1.set_xlabel('Quarter', fontsize=12)
 ax1.set_ylabel('Percent', fontsize=12)
 ax1.set_xticks(tick_positions)
 ax1.set_xticklabels(tick_labels_subset, rotation=0, ha='center', fontsize=10)
-ax1.set_ylim(-4, 12)
+ax1.set_ylim(-5, 11)
 ax1.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
 ax1.set_axisbelow(True)
 ax1.spines['top'].set_visible(False)
@@ -921,7 +921,7 @@ if has_component_data:
     ax.plot(x, total_ed_contr_gcpi, color='black', linewidth=2,
             label='Total Excess Demand Contribution', marker='', zorder=10)
 
-    ax.set_title('Excess demand contribution to inflation\n(via shortage channel, decomposed by components)',
+    ax.set_title('Excess demand contribution to inflation via shortages',
                  fontsize=15, fontweight='normal')
     ax.set_xlabel('Quarter', fontsize=16)
     ax.set_ylabel('Percent', fontsize=16)
@@ -997,7 +997,7 @@ if has_component_data:
     ax.plot(x, total_cu_contr, color='black', linewidth=2,
             label='Total Capacity Util Effect', marker='', zorder=10)
 
-    ax.set_title('Capacity utilization contribution to inflation\n(direct via wages + indirect via shortages)',
+    ax.set_title('Total effect of capacity utilization on inflation',
                  fontsize=15, fontweight='normal')
     ax.set_xlabel('Quarter', fontsize=16)
     ax.set_ylabel('Percent', fontsize=16)
@@ -1155,6 +1155,127 @@ if has_component_data:
     print(f"  Total CU effect:          {cu_total:7.2f} percentage points")
 
 
+# %%
+# =============================================================================
+# FIGURE 22: BB ORIGINAL WAGE DECOMPOSITION (Replication of Figure 13 from plot_decomp.py)
+# =============================================================================
+print("\nCreating Figure 22: Original BB Wage Decomposition...")
+
+# Load original BB decomposition data from the Python output folder (has period columns)
+bb_decomp_dir = BASE_DIR / "(3) Core Results/Decompositions/Deprecated/Output Data Python"
+
+try:
+    bb_remove_all = pd.read_excel(bb_decomp_dir / 'remove_all.xlsx')
+    bb_remove_grpe = pd.read_excel(bb_decomp_dir / 'remove_grpe.xlsx')
+    bb_remove_grpf = pd.read_excel(bb_decomp_dir / 'remove_grpf.xlsx')
+    bb_remove_vu = pd.read_excel(bb_decomp_dir / 'remove_vu.xlsx')
+    bb_remove_short = pd.read_excel(bb_decomp_dir / 'remove_shortage.xlsx')
+    bb_remove_magpty = pd.read_excel(bb_decomp_dir / 'remove_magpty.xlsx')
+    bb_remove_q2 = pd.read_excel(bb_decomp_dir / 'remove_2020q2.xlsx')
+    bb_remove_q3 = pd.read_excel(bb_decomp_dir / 'remove_2020q3.xlsx')
+    has_bb_data = True
+    print(f"  Loaded BB decomposition data: {len(bb_remove_all)} observations")
+except FileNotFoundError as e:
+    print(f"  WARNING: BB decomposition data not found: {e}")
+    print(f"  Run decomp.py first to generate the data.")
+    has_bb_data = False
+
+if has_bb_data:
+    # Convert period to datetime if needed
+    if not pd.api.types.is_datetime64_any_dtype(bb_remove_all['period']):
+        bb_remove_all['period'] = pd.to_datetime(bb_remove_all['period'])
+
+    # Filter all dataframes to period >= 2019 Q3 (matching plot_decomp.py)
+    bb_remove_all = bb_remove_all[bb_remove_all['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_grpe = bb_remove_grpe[bb_remove_grpe['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_grpf = bb_remove_grpf[bb_remove_grpf['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_vu = bb_remove_vu[bb_remove_vu['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_short = bb_remove_short[bb_remove_short['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_magpty = bb_remove_magpty[bb_remove_magpty['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_q2 = bb_remove_q2[bb_remove_q2['period'] >= filter_date].copy().reset_index(drop=True)
+    bb_remove_q3 = bb_remove_q3[bb_remove_q3['period'] >= filter_date].copy().reset_index(drop=True)
+
+    print(f"  Filtered to {len(bb_remove_all)} observations from {filter_date}")
+
+    # Create decomposition data for wages (matching plot_decomp.py Figure 13)
+    bb_decomp_gw = pd.DataFrame({
+        'period': bb_remove_all['period'],
+        'Initial Conditions': bb_remove_all['gw_simul'],
+        'Energy Prices': bb_remove_grpe['grpe_contr_gw'],
+        'Food Prices': bb_remove_grpf['grpf_contr_gw'],
+        'Shortages': bb_remove_short['shortage_contr_gw'],
+        'V/U': bb_remove_vu['vu_contr_gw'],
+        'Productivity': bb_remove_magpty['magpty_contr_gw'],
+        'Q2 Dummy': bb_remove_q2['dummy2020_q2_contr_gw'],
+        'Q3 Dummy': bb_remove_q3['dummy2020_q3_contr_gw']
+    })
+
+    bb_actual_gw = bb_remove_all['gw'].values
+    bb_quarter_labels = [period_to_quarter_label(p) for p in bb_remove_all['period']]
+
+    # Stack order for BB (no Capacity Util) - same as plot_decomp.py
+    stack_order_bb_wage = ['Initial Conditions', 'Q3 Dummy', 'Q2 Dummy', 'Productivity',
+                          'V/U', 'Food Prices', 'Energy Prices', 'Shortages']
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+
+    x_bb = np.arange(len(bb_decomp_gw))
+    width = 0.6
+
+    bottom_pos = np.zeros(len(bb_decomp_gw))
+    bottom_neg = np.zeros(len(bb_decomp_gw))
+
+    for component in stack_order_bb_wage:
+        values = bb_decomp_gw[component].values
+        pos_vals = np.where(values >= 0, values, 0)
+        neg_vals = np.where(values < 0, values, 0)
+
+        ax.bar(x_bb, pos_vals, width, bottom=bottom_pos, label=component,
+               color=colors[component], edgecolor='white', linewidth=0.5)
+        bottom_pos += pos_vals
+
+        ax.bar(x_bb, neg_vals, width, bottom=bottom_neg,
+               color=colors[component], edgecolor='white', linewidth=0.5)
+        bottom_neg += neg_vals
+
+    ax.plot(x_bb, bb_actual_gw, color='black', linewidth=2, label='Actual Wage Inflation', marker='', zorder=10)
+
+    ax.set_title('Original sources of wage inflation (BB)',
+                 fontsize=17.5, fontweight='normal')
+    ax.set_xlabel('Quarter', fontsize=16)
+    ax.set_ylabel('Percent', fontsize=16)
+
+    # X-axis ticks - every other quarter, with 45 degree rotation (matching plot_decomp.py)
+    bb_tick_positions = x_bb[::2]
+    bb_tick_labels_subset = [bb_quarter_labels[i] for i in bb_tick_positions]
+    ax.set_xticks(bb_tick_positions)
+    ax.set_xticklabels(bb_tick_labels_subset, rotation=0, ha='right')
+
+    # Y-axis (matching plot_decomp.py)
+    ax.set_ylim(-6, 8)
+    ax.set_yticks(np.arange(-5, 8, 2))
+
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray', zorder=0)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.axhline(y=0, color='black', linewidth=0.5, zorder=1)
+
+    legend_order_bb = list(reversed(stack_order_bb_wage))
+    handles = [mpatches.Patch(color=colors[comp], label=comp) for comp in legend_order_bb]
+    handles.append(plt.Line2D([0], [0], color='black', linewidth=2, label='Actual Wage Inflation'))
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=(0.5, -0.1),
+              ncol=5, frameon=True, edgecolor='black', fancybox=False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_22_bb_wage_decomposition.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_22_bb_wage_decomposition.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_22_bb_wage_decomposition.png'}")
+    plt.show()
+
+
+# %%
 print("\n" + "="*80)
 print("PLOTTING COMPLETE!")
 print("="*80)
@@ -1169,6 +1290,7 @@ print("  - figure_18_ed_components_shortage.png/pdf       [NEW: ED components â†
 print("  - figure_19_ed_components_inflation.png/pdf      [NEW: ED components â†’ Inflation]")
 print("  - figure_20_cu_total_inflation.png/pdf           [NEW: CU total effect on inflation]")
 print("  - figure_21_ed_components_combined.png/pdf       [NEW: Combined panel]")
+print("  - figure_22_bb_wage_decomposition.png/pdf        [BB: Original wage decomposition]")
 print("\n")
 
 # %%

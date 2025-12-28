@@ -18,6 +18,8 @@ Key difference from BB: shortage is now endogenous, determined by:
 - Lagged shortage (persistence)
 - Excess demand (log wages - log potential GDP - log capacity utilization)
 - GSCPI (supply chain pressure)
+
+Configuration flags at the top control which specification to use.
 """
 
 import pandas as pd
@@ -26,14 +28,67 @@ from pathlib import Path
 from dateutil.relativedelta import relativedelta
 
 # %%
+#****************************CONFIGURATION**************************************
+# These flags MUST match the specification used in regression_new_model.py!
+# NOTE: For conditional forecasts, we typically use FULL SAMPLE (not pre-COVID)
+#       because we want coefficients that capture COVID dynamics.
 
-#****************************CHANGE PATH HERE************************************
-# Input Location - coefficients and data from regression_new_model.py
-coef_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_coefficients_new_model.xlsx")
-data_path = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(2) Regressions/Output Data Python (New Model)/eq_simulations_data_new_model.xlsx")
+USE_PRE_COVID_SAMPLE = False       # Use pre-COVID sample estimates (typically False for forecasts)
+USE_LOG_CU_WAGES = False           # True = log(CU), False = level CU in wage equation
+USE_CONTEMP_CU = False             # True = CU lags 0-4, False = CU lags 1-4
+USE_DETRENDED_EXCESS_DEMAND = True # Detrend excess demand in shortage equation
 
-# Output Location
-output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Conditional Forecasts/Output Data Python (New Model)")
+#****************************PATH CONFIGURATION*********************************
+
+BASE_DIR = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data")
+
+def get_spec_dir_name():
+    """Build output directory name based on configuration flags."""
+    parts = ["Output Data (New"]
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre Covid")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    if USE_CONTEMP_CU:
+        parts.append("Contemp CU")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return " ".join(parts) + ")"
+
+def get_spec_short_name():
+    """Get a short name for the specification (for display)."""
+    parts = []
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre-COVID")
+    else:
+        parts.append("Full Sample")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    else:
+        parts.append("Level CU")
+    if USE_CONTEMP_CU:
+        parts.append("L0-L4")
+    else:
+        parts.append("L1-L4")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return ", ".join(parts)
+
+SPEC_DIR_NAME = get_spec_dir_name()
+SPEC_SHORT_NAME = get_spec_short_name()
+
+# Input paths - coefficients and data from regression_new_model.py
+coef_path = BASE_DIR / "(2) Regressions" / SPEC_DIR_NAME / (
+    "eq_coefficients_new_model_pre_covid.xlsx" if USE_PRE_COVID_SAMPLE
+    else "eq_coefficients_new_model.xlsx"
+)
+data_path = BASE_DIR / "(2) Regressions" / SPEC_DIR_NAME / (
+    "eq_simulations_data_new_model_pre_covid.xlsx" if USE_PRE_COVID_SAMPLE
+    else "eq_simulations_data_new_model.xlsx"
+)
+
+# Output path
+output_dir = BASE_DIR / "(3) Core Results/Conditional Forecasts/Output Data Python (New Model)" / SPEC_DIR_NAME
 output_dir.mkdir(parents=True, exist_ok=True)
 
 #*********************************************************************************
@@ -42,6 +97,19 @@ print("="*80)
 print("CONDITIONAL FORECASTS - MODIFIED MODEL")
 print("Liang & Sun (2025)")
 print("="*80)
+
+print(f"\nSpecification: {SPEC_SHORT_NAME}")
+print(f"  USE_PRE_COVID_SAMPLE:        {USE_PRE_COVID_SAMPLE}")
+print(f"  USE_LOG_CU_WAGES:            {USE_LOG_CU_WAGES}")
+print(f"  USE_CONTEMP_CU:              {USE_CONTEMP_CU}")
+print(f"  USE_DETRENDED_EXCESS_DEMAND: {USE_DETRENDED_EXCESS_DEMAND}")
+
+print(f"\nInput paths:")
+print(f"  Coefficients: {coef_path}")
+print(f"  Data:         {data_path}")
+print(f"  Coef exists:  {coef_path.exists()}")
+print(f"  Data exists:  {data_path.exists()}")
+print(f"\nOutput dir: {output_dir}")
 
 print("\nLoading data and coefficients...")
 

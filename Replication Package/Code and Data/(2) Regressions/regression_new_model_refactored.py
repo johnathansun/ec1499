@@ -22,9 +22,9 @@ warnings.filterwarnings('ignore')
 # %%
 #****************************CONFIGURATION**************************************
 
-USE_PRE_COVID_SAMPLE = False
+USE_PRE_COVID_SAMPLE = True
 USE_LOG_CU_WAGES = False
-USE_CONTEMP_CU = True
+USE_CONTEMP_CU = False
 USE_DETRENDED_EXCESS_DEMAND = True
 
 #****************************CHANGE PATH HERE***********************************
@@ -190,6 +190,9 @@ def constrained_regression(y, X, constraint_matrix, constraint_value, add_consta
                 self.cov_params_default = cov_beta
                 self.model = type('obj', (object,), {'exog': X_clean, 'endog': y_clean})
                 self.rsquared = 1 - np.sum(residuals**2) / np.sum((y_clean - np.mean(y_clean))**2)
+                # Calculate p-values from t-statistics
+                t_stats = beta / se
+                self.pvalues = 2 * (1 - sp_stats.t.cdf(np.abs(t_stats), n - k))
 
         results = ConstrainedResults()
     else:
@@ -401,6 +404,7 @@ else:
     df['cu'] = (df['tcu'] - df['tcu'].rolling(window=40, min_periods=20).mean()) / 100
 
 df['excess_demand'] = df['log_w'] - df['log_ngdppot'] - df['log_tcu']
+df['excess_demand_og'] = df['excess_demand']
 df['excess_demand_trend'] = df['excess_demand'].rolling(window=40).mean()
 if USE_DETRENDED_EXCESS_DEMAND:
     df['excess_demand'] = df['excess_demand'] - df['excess_demand_trend']
@@ -424,10 +428,49 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 # set dpi to 300
 plt.rcParams['figure.dpi'] = 300
-sns.lineplot(x='period', y='excess_demand', data=df, label='Excess Demand')
-plt.ylabel('Excess Demand')
+
+# create 2x1 plot
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+sns.lineplot(ax=axes[0], x='period', y='excess_demand_og', data=df)
+axes[0].set_xlabel('Date')
+axes[0].set_ylabel('')  # keep blank if you want
+axes[0].set_title('Excess Demand')
+
+sns.lineplot(ax=axes[1], x='period', y='excess_demand', data=df)
+axes[1].set_xlabel('Date')
+axes[1].set_ylabel('')
+axes[1].set_title('Excess Demand (Detrended)')
+
+plt.tight_layout()
+plt.savefig('excess_demand.pdf')
+plt.show()
+# %%
+sns.lineplot(x='period', y='gscpi', data=df, label='Excess Demand')
+plt.ylabel('')
 plt.xlabel('Date')
-plt.title('Excess Demand')
+
+# %%
+sns.lineplot(x='period', y='excess_demand_og', data=df, label='Excess Demand')
+
+# %%
+fig, ax1 = plt.subplots()
+
+ax1.set_xlabel('period')
+ax1.set_ylabel('gw', color='tab:blue')
+sns.lineplot(x='period', y='gw', data=df, ax=ax1, color='tab:blue')
+ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+ax2 = ax1.twinx()
+ax2.set_ylabel('cu', color='tab:orange')
+sns.lineplot(x='period', y='cu', data=df, ax=ax2, color='tab:orange')
+ax2.tick_params(axis='y', labelcolor='tab:orange')
+
+plt.tight_layout()
+plt.savefig('gw_cu.pdf')
+plt.show()
+
+# plt.title('Excess Demand')
 
 # %%
 #*******************************************************************************
@@ -487,7 +530,7 @@ print(f"\nR-squared: {r2_wage:.6f}")
 print(f"Observations: {results_wage.nobs}")
 
 # Save coefficients
-coef_df = pd.DataFrame({'Variable': ['const'] + X_wage_cols, 'beta': results_wage.params, 'se': results_wage.bse})
+coef_df = pd.DataFrame({'Variable': ['const'] + X_wage_cols, 'beta': results_wage.params, 'se': results_wage.bse, 'pvalue': results_wage.pvalues})
 with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx', engine='openpyxl', mode='w') as writer:
     coef_df.to_excel(writer, sheet_name='gw', index=False)
 
@@ -535,7 +578,7 @@ print(f"  GSCPI: {lr_gscpi:.4f}")
 print(f"\nR-squared: {results_shortage.rsquared:.6f}")
 print(f"Observations: {results_shortage.nobs}")
 
-coef_df = pd.DataFrame({'Variable': ['const'] + X_shortage_cols, 'beta': results_shortage.params, 'se': results_shortage.bse})
+coef_df = pd.DataFrame({'Variable': ['const'] + X_shortage_cols, 'beta': results_shortage.params, 'se': results_shortage.bse, 'pvalue': results_shortage.pvalues})
 with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx', engine='openpyxl', mode='a') as writer:
     coef_df.to_excel(writer, sheet_name='shortage', index=False)
 
@@ -576,7 +619,7 @@ for base, stats in price_stats.items():
 print(f"\nR-squared: {r2_price:.6f}")
 print(f"Observations: {results_price.nobs}")
 
-coef_df = pd.DataFrame({'Variable': ['const'] + X_price_cols, 'beta': results_price.params, 'se': results_price.bse})
+coef_df = pd.DataFrame({'Variable': ['const'] + X_price_cols, 'beta': results_price.params, 'se': results_price.bse, 'pvalue': results_price.pvalues})
 with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx', engine='openpyxl', mode='a') as writer:
     coef_df.to_excel(writer, sheet_name='gcpi', index=False)
 
@@ -627,7 +670,7 @@ for base, stats in cf1_stats.items():
 print(f"\nR-squared: {r2_cf1:.6f}")
 print(f"Observations: {results_cf1.nobs}")
 
-coef_df = pd.DataFrame({'Variable': X_cf1_cols, 'beta': results_cf1.params, 'se': results_cf1.bse})
+coef_df = pd.DataFrame({'Variable': X_cf1_cols, 'beta': results_cf1.params, 'se': results_cf1.bse, 'pvalue': results_cf1.pvalues})
 with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx', engine='openpyxl', mode='a') as writer:
     coef_df.to_excel(writer, sheet_name='cf1', index=False)
 
@@ -678,7 +721,7 @@ for base, stats in cf10_stats.items():
 print(f"\nR-squared: {r2_cf10:.6f}")
 print(f"Observations: {results_cf10.nobs}")
 
-coef_df = pd.DataFrame({'Variable': X_cf10_cols, 'beta': results_cf10.params, 'se': results_cf10.bse})
+coef_df = pd.DataFrame({'Variable': X_cf10_cols, 'beta': results_cf10.params, 'se': results_cf10.bse, 'pvalue': results_cf10.pvalues})
 with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx', engine='openpyxl', mode='a') as writer:
     coef_df.to_excel(writer, sheet_name='cf10', index=False)
 

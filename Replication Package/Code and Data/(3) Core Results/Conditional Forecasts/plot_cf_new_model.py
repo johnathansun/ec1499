@@ -12,6 +12,8 @@ Generates:
 - Figure NEW: Shortage projections (endogenous)
 - V/U paths
 - Combined figures
+
+Configuration flags at the top control which specification to plot.
 """
 
 import pandas as pd
@@ -21,13 +23,58 @@ import matplotlib.dates as mdates
 from pathlib import Path
 
 # %%
+#****************************CONFIGURATION**************************************
+# These flags MUST match the specification used in cond_forecast_new_model.py!
 
-#****************************CHANGE PATH HERE************************************
-# Input Location - output from cond_forecast_new_model.py
-input_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Conditional Forecasts/Output Data Python (New Model)")
+USE_PRE_COVID_SAMPLE = False       # Use pre-COVID sample estimates (typically False for forecasts)
+USE_LOG_CU_WAGES = False           # True = log(CU), False = level CU in wage equation
+USE_CONTEMP_CU = False             # True = CU lags 0-4, False = CU lags 1-4
+USE_DETRENDED_EXCESS_DEMAND = True # Detrend excess demand in shortage equation
 
-# Output Location for figures
-output_dir = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data/(3) Core Results/Conditional Forecasts/Figures Python (New Model)")
+#****************************PATH CONFIGURATION*********************************
+
+BASE_DIR = Path("/Users/johnathansun/Documents/ec1499/Replication Package/Code and Data")
+
+def get_spec_dir_name():
+    """Build output directory name based on configuration flags."""
+    parts = ["Output Data (New"]
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre Covid")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    if USE_CONTEMP_CU:
+        parts.append("Contemp CU")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return " ".join(parts) + ")"
+
+def get_spec_short_name():
+    """Get a short name for the specification (for display)."""
+    parts = []
+    if USE_PRE_COVID_SAMPLE:
+        parts.append("Pre-COVID")
+    else:
+        parts.append("Full Sample")
+    if USE_LOG_CU_WAGES:
+        parts.append("Log CU")
+    else:
+        parts.append("Level CU")
+    if USE_CONTEMP_CU:
+        parts.append("L0-L4")
+    else:
+        parts.append("L1-L4")
+    if USE_DETRENDED_EXCESS_DEMAND:
+        parts.append("Detrended ED")
+    return ", ".join(parts)
+
+SPEC_DIR_NAME = get_spec_dir_name()
+SPEC_SHORT_NAME = get_spec_short_name()
+
+# Input path - output from cond_forecast_new_model.py
+input_dir = BASE_DIR / "(3) Core Results/Conditional Forecasts/Output Data Python (New Model)" / SPEC_DIR_NAME
+
+# Output path for figures
+output_dir = BASE_DIR / "(3) Core Results/Conditional Forecasts/Figures Python (New Model)" / SPEC_DIR_NAME
 output_dir.mkdir(parents=True, exist_ok=True)
 
 #*********************************************************************************
@@ -36,6 +83,16 @@ print("="*80)
 print("CONDITIONAL FORECAST PLOTS - NEW MODEL")
 print("Liang & Sun (2025)")
 print("="*80)
+
+print(f"\nSpecification: {SPEC_SHORT_NAME}")
+print(f"  USE_PRE_COVID_SAMPLE:        {USE_PRE_COVID_SAMPLE}")
+print(f"  USE_LOG_CU_WAGES:            {USE_LOG_CU_WAGES}")
+print(f"  USE_CONTEMP_CU:              {USE_CONTEMP_CU}")
+print(f"  USE_DETRENDED_EXCESS_DEMAND: {USE_DETRENDED_EXCESS_DEMAND}")
+
+print(f"\nInput dir:  {input_dir}")
+print(f"Output dir: {output_dir}")
+print(f"Input exists: {input_dir.exists()}")
 
 print("\nLoading conditional forecast results...")
 
@@ -137,23 +194,23 @@ ax.plot(cf_data['period'], cf_data['gcpi_mid'], color=colors['mid'], linewidth=2
 ax.plot(cf_data['period'], cf_data['gcpi_high'], color=colors['high'], linewidth=2,
         label='v/u = 1.8')
 
-ax.set_title('Figure 14. Inflation projections (New Model with endogenous shortage).',
+ax.set_title('Inflation projections by labor market tightness',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
 
-ax.set_ylim(1.5, 4.0)
-ax.set_yticks(np.arange(1.5, 4.5, 0.5))
+ax.set_ylim(1.5, 5.0)
+ax.set_yticks(np.arange(1.5, 5.5, 0.5))
 
 ax.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
-ax.set_xticklabels(tick_labels, rotation=45, ha='right')
+ax.set_xticklabels(tick_labels, rotation=0, ha='right')
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3,
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.13), ncol=3,
           frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -245,20 +302,20 @@ ax.plot(cf_data['period'], cf_data['gw_mid'], color=colors['mid'], linewidth=2,
 ax.plot(cf_data['period'], cf_data['gw_high'], color=colors['high'], linewidth=2,
         label='v/u = 1.8')
 
-ax.set_title('Wage Growth Projections (New Model with capacity utilization)',
+ax.set_title('Wage growth projections by labor market tightness',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)
 
 ax.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
-ax.set_xticklabels(tick_labels, rotation=45, ha='right')
+ax.set_xticklabels(tick_labels, rotation=0, ha='right')
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3,
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.13), ncol=3,
           frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -410,6 +467,39 @@ if (bb_input_dir / 'terminal_mid.xlsx').exists():
     print(f"  Saved to {output_dir / 'figure_comparison_bb_vs_new.png'}")
     plt.show()
 
+    # STANDALONE INFLATION COMPARISON FIGURE
+    print("\nCreating standalone inflation comparison figure...")
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    ax.plot(cf_data['period'], cf_data['gcpi_mid'], color=colors['new_model'], linewidth=2, label='New Model')
+    ax.plot(bb_mid['period'], bb_mid['gcpi_simul'], color=colors['bb_model'], linewidth=2, linestyle='--', label='BB Model')
+
+    ax.set_title('Comparison of inflation projections (v/u = 1.2)',
+                 fontsize=17.5, fontweight='normal')
+    ax.set_xlabel('Quarter', fontsize=16)
+    ax.set_ylabel('Percent', fontsize=16)
+
+    ax.set_ylim(1.5, 5.0)
+    ax.set_yticks(np.arange(1.5, 5.5, 0.5))
+
+    ax.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
+    ax.set_xticklabels(tick_labels, rotation=0, ha='right')
+
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+    ax.xaxis.grid(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2,
+              frameon=True, edgecolor='black', fancybox=False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_inflation_comparison_only.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_inflation_comparison_only.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_inflation_comparison_only.png'}")
+    plt.show()
+
     # Print comparison statistics
     print("\n--- Model Comparison (v/u -> 1.2 scenario) ---")
     print(f"\nTerminal inflation:")
@@ -462,11 +552,12 @@ print("PLOTTING COMPLETE!")
 print("="*80)
 print(f"\nOutput files saved to: {output_dir}")
 print("  - figure_14_inflation_new_model.png/pdf")
-print("  - figure_shortage_projection.png/pdf (NEW)")
+print("  - figure_shortage_projection.png/pdf")
 print("  - figure_vu_paths.png/pdf")
 print("  - figure_wage_projection.png/pdf")
 print("  - figure_combined_4panel.png/pdf")
 print("  - figure_comparison_bb_vs_new.png/pdf (if BB data available)")
+print("  - figure_inflation_comparison_only.png/pdf (if BB data available)")
 print("\n")
 
 # %%
