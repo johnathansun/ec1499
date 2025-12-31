@@ -210,9 +210,9 @@ print("\nCreating Figure 10: Original BB Supply Shocks...")
 fig, ax = plt.subplots(figsize=(12, 7))
 
 ax.plot(quarters, irf_energy_f['gcpi_simul'].values, color=colors['Energy'],
-        linewidth=2, label='Energy Prices')
+        linewidth=2, label='Energy Prices (+)')
 ax.plot(quarters, irf_food_f['gcpi_simul'].values, color=colors['Food'],
-        linewidth=2, label='Food Prices')
+        linewidth=2, label='Food Prices (+)')
 
 ax.set_title(f'Inflation response to food/energy shocks',
              fontsize=17.5, fontweight='normal')
@@ -245,11 +245,11 @@ print("\nCreating Figure 11: Original BB Supply Shocks...")
 fig, ax = plt.subplots(figsize=(12, 7))
 
 ax.plot(quarters, irf_gscpi_f['gcpi_simul'].values, color=colors['GSCPI'],
-        linewidth=2, label='Supply Chain Pressure')
+        linewidth=2, label='Supply Chain Pressure (+)')
 ax.plot(quarters, irf_gcu_f['gcpi_simul'].values, color=colors['Capacity Util'],
-        linewidth=2, label='Capacity Utilization')
+        linewidth=2, label='Capacity Utilization (-)')
 ax.plot(quarters, irf_ngdppot_f['gcpi_simul'].values, color=colors['Potential GDP'],
-        linewidth=2, label='Potential GDP')
+        linewidth=2, label='Potential GDP (-)')
 
 ax.set_title(f'Inflation response to additional shocks',
              fontsize=17.5, fontweight='normal')
@@ -373,7 +373,7 @@ ax.plot(quarters, irf_gcu_persistent_f['gcpi_simul'].values, color=colors['Capac
         linewidth=2, linestyle='--', label='Persistent')
 
 cu_type = "log(CU)" if USE_LOG_CU_WAGES else "level CU"
-ax.set_title(f'Inflation response to capacity utilization shock',
+ax.set_title(f'Inflation response to negative capacity utilization shock',
              fontsize=16, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Percent', fontsize=16)

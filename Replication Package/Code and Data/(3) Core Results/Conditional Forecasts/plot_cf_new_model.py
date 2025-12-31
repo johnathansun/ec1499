@@ -232,20 +232,20 @@ ax.plot(cf_data['period'], cf_data['shortage_mid'], color=colors['mid'], linewid
 ax.plot(cf_data['period'], cf_data['shortage_high'], color=colors['high'], linewidth=2,
         label='v/u = 1.8')
 
-ax.set_title('Shortage Index Projections (Endogenous in New Model)',
+ax.set_title('Shortage Index Projections',
              fontsize=17.5, fontweight='normal')
 ax.set_xlabel('Quarter', fontsize=16)
 ax.set_ylabel('Shortage Index', fontsize=16)
 
 ax.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
-ax.set_xticklabels(tick_labels, rotation=45, ha='right')
+ax.set_xticklabels(tick_labels, rotation=0, ha='right')
 
 ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
 ax.xaxis.grid(False)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
-ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3,
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=3,
           frameon=True, edgecolor='black', fancybox=False)
 
 plt.tight_layout()
@@ -500,6 +500,36 @@ if (bb_input_dir / 'terminal_mid.xlsx').exists():
     print(f"  Saved to {output_dir / 'figure_inflation_comparison_only.png'}")
     plt.show()
 
+    # STANDALONE WAGE GROWTH COMPARISON FIGURE
+    print("\nCreating standalone wage growth comparison figure...")
+
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    ax.plot(cf_data['period'], cf_data['gw_mid'], color=colors['new_model'], linewidth=2, label='New Model')
+    ax.plot(bb_mid['period'], bb_mid['gw_simul'], color=colors['bb_model'], linewidth=2, linestyle='--', label='BB Model')
+
+    ax.set_title('Comparison of wage growth projections (v/u = 1.2)',
+                 fontsize=17.5, fontweight='normal')
+    ax.set_xlabel('Quarter', fontsize=16)
+    ax.set_ylabel('Percent', fontsize=16)
+
+    ax.set_xticks([cf_data['period'].iloc[i] for i in tick_positions])
+    ax.set_xticklabels(tick_labels, rotation=0, ha='right')
+
+    ax.yaxis.grid(True, linestyle='-', linewidth=0.5, color='lightgray')
+    ax.xaxis.grid(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2,
+              frameon=True, edgecolor='black', fancybox=False)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'figure_wage_comparison_only.png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_dir / 'figure_wage_comparison_only.pdf', bbox_inches='tight')
+    print(f"  Saved to {output_dir / 'figure_wage_comparison_only.png'}")
+    plt.show()
+
     # Print comparison statistics
     print("\n--- Model Comparison (v/u -> 1.2 scenario) ---")
     print(f"\nTerminal inflation:")
@@ -510,6 +540,11 @@ if (bb_input_dir / 'terminal_mid.xlsx').exists():
     print(f"\nTerminal shortage:")
     print(f"  BB Model (exogenous):  {bb_mid['shortage_simul'].iloc[-1]:.2f}")
     print(f"  New Model (endogenous): {cf_data['shortage_mid'].iloc[-1]:.2f}")
+
+    print(f"\nTerminal wage growth:")
+    print(f"  BB Model:  {bb_mid['gw_simul'].iloc[-1]:.2f}%")
+    print(f"  New Model: {cf_data['gw_mid'].iloc[-1]:.2f}%")
+    print(f"  Difference: {cf_data['gw_mid'].iloc[-1] - bb_mid['gw_simul'].iloc[-1]:.2f} pp")
 
 else:
     print("\nOriginal BB model forecasts not found. Run cond_forecast.py first.")
@@ -558,6 +593,7 @@ print("  - figure_wage_projection.png/pdf")
 print("  - figure_combined_4panel.png/pdf")
 print("  - figure_comparison_bb_vs_new.png/pdf (if BB data available)")
 print("  - figure_inflation_comparison_only.png/pdf (if BB data available)")
+print("  - figure_wage_comparison_only.png/pdf (if BB data available)")
 print("\n")
 
 # %%

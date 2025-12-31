@@ -1,0 +1,58 @@
+# Raw FRED Data Template for Forecast Comparison,,,,,,,,
+#,,,,,,,,
+# INSTRUCTIONS:,,,,,,,,
+# 1. Download the series below from FRED (links provided),,,,,,,,
+# 2. Copy/paste the quarterly values into this CSV,,,,,,,,
+# 3. Run plot_forecast_vs_realized.py - it will calculate gcpi, gw, etc. automatically,,,,,,
+#,,,,,,,,
+# FRED SERIES TO DOWNLOAD:,,,,,,,,
+# -----------------------,,,,,,,,
+# CPIAUCSL: Consumer Price Index for All Urban Consumers (Index 1982-1984=100),,,,,,,,
+#           https://fred.stlouisfed.org/series/CPIAUCSL,,,,,,,,
+#           Download: Quarterly, End of Period,,,,,,,
+#,,,,,,,,
+# ECIWAG: Employment Cost Index: Wages and Salaries, Private Industry Workers (Index Dec 2005=100),,,,,,,
+#         https://fred.stlouisfed.org/series/ECIWAG,,,,,,,,
+#         Download: Quarterly (already quarterly),,,,,,,,
+#,,,,,,,,
+# VOVERU: Job Openings / Unemployment Level ratio,,,,,,,,
+#         Calculate from: JTSJOL (thousands) / UNEMPLOY (thousands),,,,,,,,
+#         Or download pre-calculated if available,,,,,,,,
+#         https://fred.stlouisfed.org/series/JTSJOL,,,,,,,,
+#         https://fred.stlouisfed.org/series/UNEMPLOY,,,,,,,,
+#,,,,,,,,
+# EXPINF1YR: 1-Year Expected Inflation (Michigan Survey),,,,,,,,
+#            https://fred.stlouisfed.org/series/MICH,,,,,,,,
+#            Download: Quarterly Average,,,,,,,,
+#,,,,,,,,
+# EXPINF10YR: 10-Year Expected Inflation,,,,,,,,
+#             https://fred.stlouisfed.org/series/EXPINF10YR,,,,,,,,
+#             Or use T10YIE (10-Year Breakeven Inflation Rate),,,,,,,,
+#,,,,,,,,
+# OPTIONAL (for full model comparison):,,,,,,,,
+# CPIUFDSL: CPI Food (for relative food prices),,,,,,,,
+# CPIENGSL: CPI Energy (for relative energy prices),,,,,,,,
+"# SHORTAGE: Google Trends ""shortage"" index (quarterly average)",,,,,,,,
+#,,,,,,,,
+"# DATE FORMAT: ""YYYY QN"" (e.g."," ""2023 Q3"")",,,,,,,
+#,,,,,,,,
+# EXAMPLE: To get CPIAUCSL quarterly data from FRED:,,,,,,,,
+# 1. Go to https://fred.stlouisfed.org/series/CPIAUCSL,,,,,,,,
+"# 2. Click ""Edit Graph"" -> ""Modify Frequency"" -> ""Quarterly"" -> ""End of Period""",,,,,,,,
+# 3. Download CSV and copy the values below,,,,,,,,
+#,,,,,,,,
+Date,CPIAUCSL average,ECIWAG,VOVERU,EXPINF1YR,EXPINF10YR,SHORTAGE,period,CPIAUCSL
+2022 Q2,291.651,154,1.72182,4.22671337,2.40126382,32.7,4/1/22,295.072
+2022 Q3,295.508,155.8,1.98443,4.17914969,2.36598926,18,7/1/22,296.421
+2022 Q4,298.498,157.7,1.90284,2.86811918,2.21937769,23.7,10/1/22,298.808
+2023 Q1,301.192,159.4,1.56247,2.07325087,2.25862414,21.5,1/1/23,301.643
+2023 Q2,303.424,161.1,1.40198,1.36626254,1.75489679,14,4/1/23,304.099
+2023 Q3,306.042,162.8,1.53017,2.81243484,2.22221813,10,7/1/23,307.374
+2023 Q4,308.158,164.4,1.35348,3.09166499,2.27841034,10,10/1/23,308.735
+2024 Q1,310.974,166.2,1.20927,2.08221333,2.21875271,10,1/1/24,312.107
+2024 Q2,313.096,167.6,0.98949,2.7258402,2.36706367,10,4/1/24,313.131
+2024 Q3,314.183,168.9,1.08415,2.23612091,2.12450669,10,7/1/24,314.851
+2024 Q4,316.539,170.5,1.08029,2.65035634,2.32446872,10,10/1/24,317.603
+2025 Q1,319.492,171.8,0.96465,2.18385272,2.29565598,10,1/1/25,319.615
+2025 Q2,320.8,173.566,0.94839,2.38054202,2.34697544,10,4/1/25,321.5
+2025 Q3,323.288,174.954,1.0482,2.80359931,2.29884242,10,7/1/25,324.368

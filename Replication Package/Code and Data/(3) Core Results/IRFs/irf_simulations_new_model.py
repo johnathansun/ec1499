@@ -44,7 +44,7 @@ from pathlib import Path
 
 USE_PRE_COVID_SAMPLE = False       # Use pre-COVID sample estimates
 USE_LOG_CU_WAGES = False          # True = log(CU), False = level CU
-USE_CONTEMP_CU = True             # True = CU lags 0-4, False = CU lags 1-4
+USE_CONTEMP_CU = False             # True = CU lags 0-4, False = CU lags 1-4
 USE_DETRENDED_EXCESS_DEMAND = True  # Detrend excess demand in shortage eq
 
 #*******************************************************************************
@@ -372,8 +372,8 @@ def irfs_new_model(data, shock_vals, shocks, rho, coef_path):
         shock_grpf = shock_val_grpf if (add_grpf_shock and t == 4) else 0
         shock_vu = shock_val_vu if (add_vu_shock and t == 4) else 0
         shock_gscpi = shock_val_gscpi if (add_gscpi_shock and t == 4) else 0
-        shock_cu = shock_val_cu if (add_gcu_shock and t == 4) else 0
-        shock_ngdppot = shock_val_ngdppot if (add_ngdppot_shock and t == 4) else 0
+        shock_cu = -shock_val_cu if (add_gcu_shock and t == 4) else 0  # Negative shock
+        shock_ngdppot = -shock_val_ngdppot if (add_ngdppot_shock and t == 4) else 0  # Negative shock
 
         # Update exogenous shock series with persistence
         grpe_shock_series[t] = rho_grpe * grpe_shock_series[t-1] + shock_grpe

@@ -26,6 +26,7 @@ USE_PRE_COVID_SAMPLE = True
 USE_LOG_CU_WAGES = False
 USE_CONTEMP_CU = False
 USE_DETRENDED_EXCESS_DEMAND = True
+USE_FITTED_SHORTAGE = True  # Use shortagef (fitted from shortage equation) instead of raw shortage in price equation
 
 #****************************CHANGE PATH HERE***********************************
 
@@ -42,6 +43,8 @@ if USE_CONTEMP_CU:
     dir_parts.append("Contemp CU")
 if USE_DETRENDED_EXCESS_DEMAND:
     dir_parts.append("Detrended ED")
+if USE_FITTED_SHORTAGE:
+    dir_parts.append("Fitted Shortage")
 dir_name = " ".join(dir_parts) + ")"
 output_dir = Path(base_output) / dir_name
 output_suffix = "_pre_covid" if USE_PRE_COVID_SAMPLE else ""
@@ -454,6 +457,14 @@ plt.xlabel('Date')
 sns.lineplot(x='period', y='excess_demand_og', data=df, label='Excess Demand')
 
 # %%
+df_crop = df.query('period >= "2020-01-01" and period <= "2023-04-01"')
+np.std(df_crop.cu)
+
+
+
+
+
+# %%
 fig, ax1 = plt.subplots()
 
 ax1.set_xlabel('period')
@@ -582,21 +593,40 @@ coef_df = pd.DataFrame({'Variable': ['const'] + X_shortage_cols, 'beta': results
 with pd.ExcelWriter(output_dir / f'eq_coefficients_new_model{output_suffix}.xlsx', engine='openpyxl', mode='a') as writer:
     coef_df.to_excel(writer, sheet_name='shortage', index=False)
 
+# Create lags of fitted shortage for use in price equation if USE_FITTED_SHORTAGE is enabled
+if USE_FITTED_SHORTAGE:
+    print("\nCreating lags of fitted shortage (shortagef) for price equation...")
+    create_lags(df, 'shortagef', max_lag=4)
+
 # %%
 #*******************************************************************************
 # EQUATION 3: PRICE EQUATION
 #*******************************************************************************
 print("\n" + "="*80)
-print("EQUATION 3: PRICE EQUATION (gcpi) - FULL SAMPLE")
+shortage_label = "FITTED SHORTAGE" if USE_FITTED_SHORTAGE else "RAW SHORTAGE"
+print(f"EQUATION 3: PRICE EQUATION (gcpi) - FULL SAMPLE - {shortage_label}")
 print("="*80)
 
-X_price_cols = build_x_columns(PRICE_VARS)
+# Use shortagef instead of shortage if USE_FITTED_SHORTAGE is enabled
+if USE_FITTED_SHORTAGE:
+    PRICE_VARS_USED = [
+        ('magpty', [0]),
+        ('gcpi', [1, 2, 3, 4]),
+        ('gw', [0, 1, 2, 3, 4]),
+        ('grpe', [0, 1, 2, 3, 4]),
+        ('grpf', [0, 1, 2, 3, 4]),
+        ('shortagef', [0, 1, 2, 3, 4]),
+    ]
+else:
+    PRICE_VARS_USED = PRICE_VARS
+
+X_price_cols = build_x_columns(PRICE_VARS_USED)
 X_price = df[X_price_cols].copy()
 y_price = df['gcpi'].copy()
 
 # Constraint: sum of gcpi lags + sum of gw = 1
 constraint_R = np.zeros((1, len(X_price_cols)))
-price_groups = get_group_indices(PRICE_VARS, has_constant=False)
+price_groups = get_group_indices(PRICE_VARS_USED, has_constant=False)
 for i in price_groups['gcpi'] + price_groups['gw']:
     constraint_R[0, i] = 1
 constraint_q = np.array([1.0])
@@ -607,7 +637,7 @@ results_price, valid_idx = constrained_regression(y_price, X_price, constraint_R
 df.loc[valid_idx, 'gcpif'] = results_price.fittedvalues
 df['gcpi_residuals'] = df['gcpi'] - df['gcpif']
 
-price_stats = compute_group_stats(results_price, PRICE_VARS, has_constant=True)
+price_stats = compute_group_stats(results_price, PRICE_VARS_USED, has_constant=True)
 
 valid_data = df.dropna(subset=['gcpi', 'gcpif'])
 valid_data = valid_data[valid_data['period'] >= '1990-01-01']
@@ -767,7 +797,7 @@ r2_label = 'R2 (pre-COVID)' if USE_PRE_COVID_SAMPLE else 'R2'
 
 # Build summary DataFrames automatically from group stats (transposed format)
 summary_wage = build_summary_df(wage_stats, WAGE_VARS, r2_wage, results_wage.nobs, r2_label)
-summary_price = build_summary_df(price_stats, PRICE_VARS, r2_price, results_price.nobs, 'R2')
+summary_price = build_summary_df(price_stats, PRICE_VARS_USED, r2_price, results_price.nobs, 'R2')
 summary_cf1 = build_summary_df(cf1_stats, CF1_VARS, r2_cf1, results_cf1.nobs, r2_label)
 summary_cf10 = build_summary_df(cf10_stats, CF10_VARS, r2_cf10, results_cf10.nobs, r2_label)
 
@@ -800,7 +830,11 @@ print(f"\n2. SHORTAGE EQUATION: R² = {results_shortage.rsquared:.4f}")
 print(f"   Long-run ED multiplier: {lr_excess_demand:.4f}")
 print(f"   Long-run GSCPI multiplier: {lr_gscpi:.4f}")
 
+shortage_var_name = 'shortagef' if USE_FITTED_SHORTAGE else 'shortage'
 print(f"\n3. PRICE EQUATION: R² = {r2_price:.4f}")
+print(f"   Using: {shortage_var_name} ({'fitted from shortage equation' if USE_FITTED_SHORTAGE else 'raw Google Trends index'})")
+print(f"   {shortage_var_name} effect (sum): {price_stats[shortage_var_name]['sum']:.4f}, p-value: {price_stats[shortage_var_name]['p_joint']:.4f}")
+
 print(f"\n4. CF1 EQUATION: R² = {r2_cf1:.4f}")
 print(f"\n5. CF10 EQUATION: R² = {r2_cf10:.4f}")
 

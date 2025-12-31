@@ -6,6 +6,47 @@ This document describes the conditional forecast methodology for the modified Be
 
 ---
 
+## Forecast Setup
+
+### Forecast Origin and Horizon
+
+| Parameter | Value |
+|-----------|-------|
+| **Forecast origin** | Q2 2022 |
+| **Forecast horizon** | 100 years (400 quarters) |
+| **Initial conditions** | First 4 periods from historical data |
+
+### Exogenous Variable Assumptions
+
+After the initial 4 periods, all exogenous variables are set to their steady-state values:
+
+| Variable | Description | Steady-State Value | Rationale |
+|----------|-------------|-------------------|-----------|
+| $grpe_t$ | Relative energy price growth | 0 | No persistent energy price shocks |
+| $grpf_t$ | Relative food price growth | 0 | No persistent food price shocks |
+| $magpty_t$ | Productivity growth (MA) | 1.0% | Long-run productivity trend |
+| $cu_t$ | Detrended capacity utilization | 0 | Capacity on trend |
+| $gscpi_t$ | Supply chain pressure index | 0 | No supply chain disruptions |
+| $TCU^*$ | Capacity utilization level | 75% | Historical average |
+| $g_{NGDPPOT}$ | Nominal potential GDP growth | 4% | Trend nominal GDP growth |
+
+### V/U Path Scenarios
+
+The vacancy-unemployment ratio transitions **linearly over 8 quarters** from its initial value to the target:
+
+| Scenario | Terminal $vu$ | Description |
+|----------|---------------|-------------|
+| **Low** | 0.8 | Labor market loosens significantly |
+| **Target** | 1.2 | Pre-pandemic normal (steady state) |
+| **High** | 1.8 | Labor market remains persistently tight |
+
+Transition formula:
+$$
+vu_t = vu_{t-1} + \frac{vu^{target} - vu_0}{8}
+$$
+
+---
+
 ## Model Equations
 
 ### 1. Wage Equation
@@ -193,34 +234,41 @@ This small negative value reflects wages growing slower than nominal potential G
 
 ---
 
-## V/U Path Scenarios
-
-The conditional forecast examines three scenarios for the vacancy-unemployment ratio:
-
-1. **Low ($vu \to 0.8$)**: Labor market loosens significantly
-2. **Target ($vu \to 1.2$)**: Labor market returns to pre-pandemic normal
-3. **High ($vu \to 1.8$)**: Labor market remains tight
-
-The transition occurs linearly over 8 quarters:
-$$
-vu_t = vu_{t-1} + \frac{vu^{target} - vu_0}{8}
-$$
-
----
-
 ## Key Differences from Original Bernanke-Blanchard
 
-1. **Endogenous Shortages**: Shortages are no longer exogenous but depend on excess demand and supply chain pressure (GSCPI)
+### Structural Differences
 
-2. **Capacity Utilization in Wages**: The wage equation includes detrended capacity utilization as an additional driver
+| Feature | BB Model | New Model |
+|---------|----------|-----------|
+| **Shortage treatment** | Exogenous ($shortage^* = 10.0$) | Endogenous (depends on $ed_t$ and $gscpi_t$) |
+| **Capacity utilization** | Not in wage equation | Included in wage equation |
+| **Excess demand** | Not computed | Computed endogenously from wages |
+| **Supply chain pressure** | Not modeled | GSCPI affects shortages |
 
-3. **Excess Demand Feedback**: Wages affect excess demand, which affects shortages, which affects prices, creating an additional feedback channel:
+### Detailed Differences
+
+1. **Endogenous Shortages**: Shortages are no longer exogenous but depend on excess demand and supply chain pressure (GSCPI). In the BB model, shortage is held fixed at $shortage^* = 10.0$.
+
+2. **Capacity Utilization in Wages**: The wage equation includes detrended capacity utilization as an additional driver. The BB model does not include this channel.
+
+3. **Excess Demand Feedback**: Wages affect excess demand, which affects shortages, which affects prices, creating an additional feedback channel not present in BB:
 
 $$
 gw_t \to W_t \to ed_t \to shortage_t \to gcpi_t \to cf1_t \to gw_{t+1}
 $$
 
-4. **Dynamic Trend**: The excess demand trend evolves as a rolling mean rather than being fixed, ensuring proper convergence in steady state
+4. **Dynamic Trend**: The excess demand trend evolves as a rolling mean rather than being fixed, ensuring proper convergence in steady state.
+
+### Steady-State Parameter Comparison
+
+| Parameter | BB Model | New Model |
+|-----------|----------|-----------|
+| $vu^*$ | 1.2 | 1.2 |
+| $magpty^*$ | 1.0 | 1.0 |
+| $shortage^*$ | 10.0 (exogenous) | Calculated from shortage equation |
+| $cu^*$ | N/A | 0 (on trend) |
+| $gscpi^*$ | N/A | 0 |
+| $ed^*$ | N/A | 0 (on trend) |
 
 ---
 
@@ -244,9 +292,34 @@ See `decomposition_methodology.md` for details on the decomposition approach.
 
 ## Output Files
 
-The forecast generates three Excel files:
+### Forecast Data Files
+
+The forecast generates three Excel files in `Output Data Python (New Model)/`:
 - `terminal_low.xlsx`: $vu \to 0.8$
 - `terminal_mid.xlsx`: $vu \to 1.2$ (target steady state)
 - `terminal_high.xlsx`: $vu \to 1.8$
 
 Each contains time series of all simulated variables including the endogenous shortage and excess demand paths.
+
+### Figure Files
+
+The plotting script generates figures in `Figures Python (New Model)/`:
+
+| File | Description |
+|------|-------------|
+| `figure_14_inflation_new_model.png/pdf` | Inflation projections by V/U scenario |
+| `figure_shortage_projection.png/pdf` | Endogenous shortage projections by V/U scenario |
+| `figure_vu_paths.png/pdf` | V/U ratio paths for the three scenarios |
+| `figure_wage_projection.png/pdf` | Wage growth projections by V/U scenario |
+| `figure_combined_4panel.png/pdf` | Combined 4-panel figure (V/U, shortage, wages, inflation) |
+| `figure_comparison_bb_vs_new.png/pdf` | Side-by-side BB vs New Model comparison |
+| `figure_inflation_comparison_only.png/pdf` | Standalone inflation comparison (BB vs New) |
+| `figure_wage_comparison_only.png/pdf` | Standalone wage growth comparison (BB vs New) |
+
+### Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `cond_forecast.py` | Original BB model conditional forecast |
+| `cond_forecast_new_model.py` | New model conditional forecast |
+| `plot_cf_new_model.py` | Plotting script for all figures |
